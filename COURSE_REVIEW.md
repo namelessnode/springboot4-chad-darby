@@ -97,6 +97,8 @@ A Spring bean with one constructor does not need `@Autowired` on that constructo
 
 **Java rule:** a blank `final` field can be assigned in a constructor, but not later in a setter. That compile-time failure comes from Java, not Spring.
 
+A no-argument constructor is not automatically called before a parameterized constructor. Java executes the selected constructor; `this(...)` explicitly chains to another constructor in the same class, while `super(...)` invokes a direct-superclass constructor. If neither is written, Java implicitly invokes `super()`. Adding an empty no-argument constructor to a class with a blank `final` dependency fails unless that constructor also assigns the field or delegates to one that does.
+
 [Compare all three dependency-injection styles](02-spring-boot-core/coach/notes.md#7-dependency-injection-styles).
 
 ### Resolving multiple implementations
@@ -104,10 +106,12 @@ A Spring bean with one constructor does not need `@Autowired` on that constructo
 Injection by interface works automatically while there is one matching bean. With several `Coach` beans, Spring needs another selection rule:
 
 - `@Qualifier` narrows candidates for one injection point.
-- `@Primary` marks the normal default for unqualified single-bean injection.
+- `@Primary` marks the normal default for unqualified single-bean injection when exactly one primary remains among the eligible candidates.
 - `List<Coach>` or `Map<String, Coach>` can intentionally receive multiple implementations.
 
 Default component bean names normally use lower camel case, such as `CricketCoach` → `cricketCoach`. Qualifier values are case-sensitive. A qualifier is local, so fixing one controller does not resolve ambiguous dependencies in other controller beans.
+
+When cricket is primary but an injection point says `@Qualifier("tennisCoach")`, tennis is injected: the qualifier makes a local selection instead of using the normal default. Marking both cricket and tennis primary does not produce a winner for an unqualified `Coach`; Spring fails because more than one primary candidate remains.
 
 [Review the four-bean failure, qualifier convention, and alternatives](02-spring-boot-core/coach/notes.md#8-multiple-beans-ambiguity-qualifiers-and-primary-beans).
 
@@ -115,9 +119,19 @@ Default component bean names normally use lower camel case, such as `CricketCoac
 
 `@RestController` is effectively `@Controller` plus `@ResponseBody`. Spring MVC maps the incoming GET path to a handler method; the controller calls its already-injected coach bean; the returned `String` is written into the HTTP response body.
 
-The dependency is selected while Spring creates the controller bean, not once per HTTP request.
+With direct injection, Spring selects and supplies the dependency while creating the controller bean. With the current constructor controller’s parameter-level `@Lazy`, Spring supplies a proxy during controller creation and resolves the real baseball target when the proxy is first used.
 
 [Review the request sequence and current endpoints](02-spring-boot-core/coach/notes.md#9-restcontroller-controller-and-the-http-request-path).
+
+### Eager beans, lazy beans, and lazy dependency proxies
+
+Singleton beans are eager by default. Marking a provider bean `@Lazy` delays it only until something requests it; an eager singleton that directly depends on it can still force creation during startup.
+
+Class-level `@Lazy` delays the consumer bean itself. Parameter-level `@Lazy` injects a proxy, allowing the consumer to be created while delaying the real dependency until the proxy is first used. Therefore, “controller logged at startup, coach logged on the first request” is the expected parameter-proxy pattern.
+
+**Recall rule:** class-level lazy changes when the consumer exists; injection-point lazy changes when one dependency behind a proxy is resolved.
+
+[Review the primary, constructor, and lazy-initialization experiments](02-spring-boot-core/coach/notes.md#14-lesson-update-2026-09-16-primary-constructors-and-lazy-initialization).
 
 ## Quick recall across sections
 
@@ -133,5 +147,11 @@ The dependency is selected while Spring creates the controller bean, not once pe
 10. What is the difference between `@Qualifier` and `@Primary`?
 11. Why must the original package be listed after explicit `scanBasePackages` values are supplied?
 12. Why can a missing controller mapping appear in TRACE logs as a missing static resource?
+13. Why does a qualifier select tennis even when cricket is primary?
+14. Why do two primary beans of the same eligible type still cause ambiguity?
+15. Why can a bean marked `@Lazy` still be constructed during startup?
+16. What is the difference between class-level and constructor-parameter-level `@Lazy`?
+17. Does `super()` call another constructor in the same class or in the superclass?
+18. Why can adding an empty no-argument constructor break a blank `final` dependency field?
 
 Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md) and [Section 02 project notes](02-spring-boot-core/coach/notes.md).
