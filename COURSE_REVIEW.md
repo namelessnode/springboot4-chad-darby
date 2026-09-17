@@ -133,6 +133,40 @@ Class-level `@Lazy` delays the consumer bean itself. Parameter-level `@Lazy` inj
 
 [Review the primary, constructor, and lazy-initialization experiments](02-spring-boot-core/coach/notes.md#14-lesson-update-2026-09-16-primary-constructors-and-lazy-initialization).
 
+### Global lazy initialization
+
+`spring.main.lazy-initialization=true` makes eligible beans lazy by default. It can reduce startup work, but it shifts construction and possible failures to first use. Required framework infrastructure still starts, and an explicitly eager or early-requested bean can still be created during startup.
+
+**Recall rule:** global lazy initialization moves work from startup to demand; it does not remove the work.
+
+### Singleton and prototype scope
+
+| Scope | Container behavior | Key warning |
+|---|---|---|
+| Singleton | One shared instance per bean definition and Spring container; the default. | Keep shared mutable state and thread safety in mind. |
+| Prototype | A new instance for every request made to the container. | Direct injection into a singleton occurs only when that singleton is created; it does not refresh the prototype on every method call. |
+
+In the current scope exercise, the singleton `ScopeController` requests the primary prototype `CricketCoach` twice during construction. Spring creates two objects, so `firstCoach == secondCoach` is `false`. The controller then retains those two references. Use on-demand lookup such as `ObjectProvider` when a long-lived bean truly needs a fresh prototype repeatedly.
+
+### Lifecycle callbacks and ownership
+
+`@PostConstruct` runs after construction and dependency injection. For a container-managed singleton, `@PreDestroy` runs during normal application-context shutdown. It is not a garbage-collection callback, and a forced process termination may prevent it from running.
+
+Spring caches and owns singleton lifetimes, so it can destroy them when the context closes. For prototype beans, Spring creates and initializes each instance and then hands it to the requester without keeping a prototype-instance cache. The requester owns cleanup; configured prototype destruction callbacks are not invoked automatically.
+
+**Retention nuance:** although the bean factory does not cache a prototype for reuse, a dependent object can retain that prototype through an ordinary Java field.
+
+### Component scanning versus explicit `@Bean` registration
+
+| Registration style | Best fit | Default bean name |
+|---|---|---|
+| `@Component`, `@Service`, `@Repository`, or `@Controller` | Application-owned classes with straightforward construction | Normally the lower-camel-case class name. |
+| `@Configuration` plus `@Bean` | Third-party classes, builders or factories, custom construction, and multiple configured instances | The bean method name unless `@Bean` supplies an explicit name. |
+
+The current `SportConfig` method uses `@Bean("aqua")`, so `SwimCoachController` correctly requests `@Qualifier("aqua")`. `SwimCoach` needs no `@Component`: the object returned from the processed bean method becomes Spring-managed.
+
+[Review global lazy initialization, scopes, lifecycle, and Java configuration](02-spring-boot-core/coach/notes.md#15-lesson-update-2026-09-17-global-lazy-initialization-scopes-lifecycle-and-bean).
+
 ## Quick recall across sections
 
 1. Which two properties determine the port and application-wide URL prefix?
@@ -153,5 +187,13 @@ Class-level `@Lazy` delays the consumer bean itself. Parameter-level `@Lazy` inj
 16. What is the difference between class-level and constructor-parameter-level `@Lazy`?
 17. Does `super()` call another constructor in the same class or in the superclass?
 18. Why can adding an empty no-argument constructor break a blank `final` dependency field?
+19. What does global lazy initialization change, and what does it leave eager?
+20. Why did the prototype scope exercise return `false`?
+21. Why does repeatedly calling the singleton scope controller not inject new prototypes each time?
+22. What is the difference between `@PostConstruct`, `@PreDestroy`, and Java garbage collection?
+23. Why does Spring automatically destroy singleton beans but not prototype beans?
+24. What does the context retain for a prototype: an instance cache or a bean definition?
+25. Why is the current `SwimCoach` bean named `aqua` instead of `SwimCoach`?
+26. When is `@Bean` more suitable than `@Component`?
 
 Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md) and [Section 02 project notes](02-spring-boot-core/coach/notes.md).

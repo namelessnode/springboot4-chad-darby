@@ -1,11 +1,11 @@
 ---
-title: "Spring Core, Dependency Injection, Bean Selection, and Lazy Initialization — Revision Notes"
-description: "Code-backed notes for Spring Boot startup, the IoC container, dependency injection, qualifiers, primary beans, Java constructors, and lazy bean initialization."
+title: "Spring Core, Bean Scope, Lifecycle, and Java Configuration — Revision Notes"
+description: "Code-backed notes for dependency injection, bean selection, lazy initialization, scopes, lifecycle callbacks, and Java-based bean configuration."
 ---
 
-# Spring Core, Dependency Injection, Bean Selection, and Lazy Initialization — Revision Notes
+# Spring Core, Bean Scope, Lifecycle, and Java Configuration — Revision Notes
 
-> **Project snapshot:** Spring Boot 4.1.1, Spring Framework 7.0.9, Java 26, Maven 3.9.16, Spring MVC, Actuator, and DevTools. These notes describe the checked-out `coach` project through **16 September 2026**. The course section is **in progress** and will continue in the next lesson.
+> **Project snapshot:** Spring Boot 4.1.1, Spring Framework 7.0.9, Java 26, Maven 3.9.16, Spring MVC, Actuator, and DevTools. These notes describe the checked-out `coach` project through **17 September 2026**. The course section is **in progress** and will continue in the next lesson.
 
 ## 1. Quick revision sheet
 
@@ -15,21 +15,25 @@ description: "Code-backed notes for Spring Boot startup, the IoC container, depe
 | What is IoC? | The application gives control of object creation, assembly, and lifecycle to Spring's container. | [Spring Framework 7.0 — IoC container](https://docs.spring.io/spring-framework/reference/core/beans/introduction.html) |
 | What is dependency injection? | An object declares what it needs, and Spring supplies matching beans instead of the object constructing its own dependencies. | [Spring Framework 7.0 — dependencies](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-collaborators.html) |
 | What is the application context? | The running Spring container that stores bean definitions, creates beans, connects dependencies, and manages their lifecycle. | [Spring Framework 7.0 — IoC container](https://docs.spring.io/spring-framework/reference/core/beans/introduction.html) |
-| What is a bean? | An ordinary Java object whose creation and lifecycle are managed by Spring. | (`src/main/java/com/example/coach/common/CricketCoach.java:8`) |
+| What is a bean? | An ordinary Java object registered with the Spring container, either through scanning or explicit configuration. | (`src/main/java/com/example/coach/config/SportConfig.java:11`) |
 | What does `@Component` do? | It marks a class as a component-scanning candidate, allowing Spring to register and manage it as a bean. | (`src/main/java/com/example/coach/common/BaseballCoach.java:8`) |
 | Which injection style is preferred for required dependencies? | Constructor injection, because requirements are explicit and the dependency reference can be `final`. | (`src/main/java/com/example/coach/common/CoachControllerWithConstructorInjection.java:18`) |
 | Is setter injection the same as field injection? | No. Setter injection calls an annotated method; field injection writes directly to an annotated field. | (`src/main/java/com/example/coach/common/CoachControllerWithSetterInjection.java:14`) |
 | When is `@Autowired` optional? | A Spring bean with exactly one constructor does not need `@Autowired` on that constructor. | [Spring Framework 7.0 — using `@Autowired`](https://docs.spring.io/spring-framework/reference/core/beans/annotation-config/autowired.html) |
 | Why did four `Coach` implementations break startup? | Injection by the interface type found four matching beans, so Spring needed a rule for choosing one. | (`src/main/java/com/example/coach/common/Coach.java:3`) |
 | What does `@Qualifier` solve? | It narrows the type-matched candidates for one injection point to the requested bean or qualifier label. | (`src/main/java/com/example/coach/common/CoachControllerWithQualifiers.java:12`) |
-| What does `@Primary` solve? | It supplies the preferred default when an unqualified single-valued injection point has several candidates and exactly one is primary. | (`src/main/java/com/example/coach/common/CricketCoach.java:9`) |
+| What does `@Primary` solve? | It supplies the preferred default when an unqualified single-valued injection point has several candidates and exactly one is primary. | (`src/main/java/com/example/coach/common/CricketCoach.java:13`) |
 | Which wins when `@Qualifier("tennisCoach")` and a primary cricket bean both exist? | The qualifier narrows the eligible candidates to tennis, so tennis is injected. | (`src/main/java/com/example/coach/common/CoachControllerWithPrimaryAnnotation.java:13`) |
 | What does parameter-level `@Lazy` do? | It injects a proxy now and resolves the real dependency when that proxy is first used. | (`src/main/java/com/example/coach/common/CoachControllerWithConstructorInjection.java:23`) |
+| What does global lazy initialization do? | It makes eligible beans lazy by default, shifting their creation from startup to first use. | (`src/main/resources/application.properties:4`) |
+| What is the difference between singleton and prototype scope? | Singleton reuses one instance per bean definition and container; prototype creates a new instance for every container request. | (`src/main/java/com/example/coach/common/CricketCoach.java:14`) |
+| When does `@PreDestroy` run? | For this singleton controller, it runs when the application context closes gracefully, not when an endpoint finishes or Java garbage collection occurs. | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:31`) |
+| What is the current explicit `@Bean` name? | `SportConfig` registers the returned `SwimCoach` object as `aqua`, which is the qualifier used by `SwimCoachController`. | (`src/main/java/com/example/coach/config/SportConfig.java:11`) |
 | What is `@RestController`? | A controller whose handler return values are written to the HTTP response body; effectively `@Controller` plus `@ResponseBody`. | [Spring Framework 7.0 — `@ResponseBody`](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/responsebody.html) |
 
 ## 2. Lesson snapshot
 
-The project demonstrates Spring's core object-management model through a small `Coach` interface. Four implementations are registered as Spring beans. Five controllers request a `Coach` dependency and demonstrate qualifiers, a primary bean, eager singleton creation, and lazy dependency resolution.
+The project demonstrates Spring's core object-management model through a small `Coach` interface. Four implementations are registered through component scanning and `SwimCoach` is registered through an `@Bean` method. Eight controllers now demonstrate bean selection, lazy creation, scopes, lifecycle callbacks, and REST request flow.
 
 | Project part | Current implementation | Learning purpose | Source |
 |---|---|---|---|
@@ -40,6 +44,10 @@ The project demonstrates Spring's core object-management model through a small `
 | Setter injection | `CoachControllerWithSetterInjection` | Demonstrates injection after construction, selected with `tennisCoach`. | (`src/main/java/com/example/coach/common/CoachControllerWithSetterInjection.java:14`) |
 | Qualifier demonstration | `CoachControllerWithQualifiers` | Demonstrates constructor-parameter qualification with `cricketCoach`. | (`src/main/java/com/example/coach/common/CoachControllerWithQualifiers.java:12`) |
 | Primary demonstration | `CoachControllerWithPrimaryAnnotation` | Demonstrates that an explicit `tennisCoach` qualifier overrides the normal primary-cricket default for this injection point. | (`src/main/java/com/example/coach/common/CoachControllerWithPrimaryAnnotation.java:13`) |
+| Scope demonstration | `ScopeController` | Compares two independently resolved `Coach` references with `==`. | (`src/main/java/com/example/coach/common/ScopeController.java:12`) |
+| Lifecycle demonstration | `BeanLifeCycleController` | Logs `@PostConstruct` after creation and `@PreDestroy` during graceful context shutdown. | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:26`) |
+| Java configuration | `SportConfig` and `SwimCoach` | Registers a plain Java class as the explicitly named `aqua` bean without annotating `SwimCoach` as a component. | (`src/main/java/com/example/coach/config/SportConfig.java:8`) |
+| Explicit-bean consumer | `SwimCoachController` | Selects the configured bean with `@Qualifier("aqua")`. | (`src/main/java/com/example/coach/common/SwimCoachController.java:12`) |
 | Outside-package scan | `ControllerFromOutsideBasePackage` | Proves that explicit component-scan roots can include an otherwise undiscovered controller. | (`src/main/java/com/example/outsidebasepackage/ControllerFromOutsideBasePackage.java:8`) |
 | Context test | `CoachApplicationTests.contextLoads()` | Checks whether Spring can create the current context and resolve every required dependency. | (`src/test/java/com/example/coach/CoachApplicationTests.java:6`) |
 
@@ -77,15 +85,17 @@ graph TD
     Context --> C[cricketCoach bean]
     Context --> T[tennisCoach bean]
     Context --> R[trackCoach bean]
+    Context --> A[aqua bean from SportConfig]
     Context --> Controllers[Controller beans]
     B --> Controllers
     C --> Controllers
     T --> Controllers
     R --> Controllers
+    A --> Controllers
     classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    class Config,Context,Scan,B,C,T,R,Controllers dark
+    class Config,Context,Scan,B,C,T,R,A,Controllers dark
 ```
-<!-- Sources: src/main/java/com/example/coach/CoachApplication.java:6, src/main/java/com/example/coach/common/BaseballCoach.java:8, src/main/java/com/example/coach/common/CricketCoach.java:8, src/main/java/com/example/coach/common/TennisCoach.java:7, src/main/java/com/example/coach/common/TrackCoach.java:7 -->
+<!-- Sources: src/main/java/com/example/coach/CoachApplication.java:6, src/main/java/com/example/coach/common/BaseballCoach.java:8, src/main/java/com/example/coach/common/CricketCoach.java:12, src/main/java/com/example/coach/common/SwimCoach.java:6, src/main/java/com/example/coach/config/SportConfig.java:11 -->
 
 ### Plain Java construction versus Spring-managed construction
 
@@ -112,11 +122,12 @@ Spring selects the bean and passes it into the constructor. The current implemen
 
 ### Which objects are actually managed?
 
-- The four coach implementations are managed because they are discovered through `@Component`.
+- Baseball, cricket, tennis, and track are managed because they are discovered through `@Component`.
+- `SwimCoach` has no component stereotype; the object returned by `SportConfig.swimCoach()` becomes the managed bean named `aqua`.
 - The controllers are managed because `@RestController` includes the `@Controller` stereotype, which is a specialized component.
 - The `Coach` interface itself is not instantiated; it is only the contract implemented by the four beans.
 - An object created manually with `new` is normally an ordinary Java object outside the application context. Spring does not automatically inject dependencies into it or manage its lifecycle.
-- A class does not have to use `@Component` to become a bean. A future configuration class can also expose an object using an `@Bean` method. That alternative is not implemented here.
+- A class does not have to use `@Component` to become a bean. The current `SportConfig` class exposes `SwimCoach` through an `@Bean` method.
 
 By default, a component bean uses singleton scope: one instance exists for that bean definition inside one application context. This is a Spring-container singleton, not necessarily one instance for the entire JVM. [Official bean scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)
 
@@ -167,12 +178,12 @@ sequenceDiagram
     Boot->>Context: Create web application context and Environment
     Context->>Context: Load application.properties
     Context->>Scan: Scan both configured base packages
-    Scan-->>Beans: Register coach and controller bean definitions
-    Beans->>Beans: Instantiate singleton beans and inject dependencies
+    Scan-->>Beans: Register component and configuration bean definitions
+    Beans->>Beans: Apply global lazy defaults and create required infrastructure
     Context->>Web: Apply MVC auto-configuration and start embedded Tomcat
     Web-->>Main: Application ready on port 8080 by default
 ```
-<!-- Sources: pom.xml:8, pom.xml:30, src/main/java/com/example/coach/CoachApplication.java:6, src/main/resources/application.properties:1, src/main/java/com/example/coach/common/CoachControllerWithConstructorInjection.java:23 -->
+<!-- Sources: pom.xml:8, pom.xml:30, src/main/java/com/example/coach/CoachApplication.java:6, src/main/resources/application.properties:4, src/main/java/com/example/coach/common/CoachControllerWithConstructorInjection.java:23 -->
 
 Important distinction: `SpringApplication.run(...)` does much more than call controller methods. It creates the application context first. If one required dependency cannot be resolved, context creation fails and the web server never becomes ready.
 
@@ -209,15 +220,17 @@ flowchart TD
     Start[Start component scan] --> Root1[Scan com.example.coach]
     Start --> Root2[Scan com.example.outsidebasepackage]
     Root1 --> Coaches[Find four Component coach classes]
-    Root1 --> LocalControllers[Find four RestController classes]
+    Root1 --> Config[Find SportConfig and its Bean method]
+    Root1 --> LocalControllers[Find seven RestController classes]
     Root2 --> OutsideController[Find outside RestController]
     Coaches --> Register[Register bean definitions]
+    Config --> Register
     LocalControllers --> Register
     OutsideController --> Register
     classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
-    class Start,Root1,Root2,Coaches,LocalControllers,OutsideController,Register dark
+    class Start,Root1,Root2,Coaches,Config,LocalControllers,OutsideController,Register dark
 ```
-<!-- Sources: src/main/java/com/example/coach/CoachApplication.java:6, src/main/java/com/example/coach/common/BaseballCoach.java:8, src/main/java/com/example/coach/common/CoachControllerWithConstructorInjection.java:11, src/main/java/com/example/outsidebasepackage/ControllerFromOutsideBasePackage.java:8 -->
+<!-- Sources: src/main/java/com/example/coach/CoachApplication.java:6, src/main/java/com/example/coach/common/BaseballCoach.java:8, src/main/java/com/example/coach/config/SportConfig.java:8, src/main/java/com/example/coach/common/CoachControllerWithConstructorInjection.java:11, src/main/java/com/example/outsidebasepackage/ControllerFromOutsideBasePackage.java:8 -->
 
 ### Why the outside endpoint originally returned 404
 
@@ -258,12 +271,13 @@ public interface Coach {
 
 (`src/main/java/com/example/coach/common/Coach.java:3`)
 
-Each implementation provides a different response and is annotated with `@Component`.
+Each implementation provides a different response. Four are discovered through `@Component`; `SwimCoach` is registered by `SportConfig` instead.
 
 | Class | Default bean name | Returned workout | Source |
 |---|---|---|---|
 | `BaseballCoach` | `baseballCoach` | `Baseball Coach - Do baseball things` | (`src/main/java/com/example/coach/common/BaseballCoach.java:8`) |
-| `CricketCoach` | `cricketCoach` | `Cricket Coach - Practice bowling` | (`src/main/java/com/example/coach/common/CricketCoach.java:8`) |
+| `CricketCoach` | `cricketCoach` | `Cricket Coach - Practice bowling` | (`src/main/java/com/example/coach/common/CricketCoach.java:12`) |
+| `SwimCoach` | `aqua` | `Swim Coach: Do swimming things` | (`src/main/java/com/example/coach/config/SportConfig.java:11`) |
 | `TennisCoach` | `tennisCoach` | `Tennis Coach - Do Tennis things` | (`src/main/java/com/example/coach/common/TennisCoach.java:7`) |
 | `TrackCoach` | `trackCoach` | `Track Coach - Do track things` | (`src/main/java/com/example/coach/common/TrackCoach.java:7`) |
 
@@ -277,7 +291,7 @@ graph BT
     classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     class Baseball,Cricket,Tennis,Track,Coach,Controllers dark
 ```
-<!-- Sources: src/main/java/com/example/coach/common/Coach.java:3, src/main/java/com/example/coach/common/BaseballCoach.java:10, src/main/java/com/example/coach/common/CricketCoach.java:10, src/main/java/com/example/coach/common/TennisCoach.java:8, src/main/java/com/example/coach/common/TrackCoach.java:8 -->
+<!-- Sources: src/main/java/com/example/coach/common/Coach.java:3, src/main/java/com/example/coach/common/BaseballCoach.java:10, src/main/java/com/example/coach/common/CricketCoach.java:15, src/main/java/com/example/coach/common/TennisCoach.java:8, src/main/java/com/example/coach/config/SportConfig.java:11 -->
 
 ### `@Component` does not inject anything by itself
 
@@ -385,7 +399,7 @@ Spring could not safely guess which behavior the controller intended, so context
 
 A qualifier applies only to the injection point where it is written. Adding `@Qualifier("cricketCoach")` to `CoachControllerWithQualifiers` resolved that controller, but the constructor, setter, and outside-package controllers still had unqualified `Coach` dependencies.
 
-Spring creates all singleton controller beans during application-context startup. One unresolved controller is enough to fail the whole context, even if the intended request would target a different controller.
+During the earlier default-eager experiment, Spring created all singleton controller beans during application-context startup. One unresolved controller was enough to fail the whole context, even if the intended request would target a different controller. With today’s global lazy setting, a comparable failure can instead be delayed until the affected bean is requested.
 
 ### Current qualifier selections
 
@@ -396,6 +410,7 @@ Spring creates all singleton controller beans during application-context startup
 | Qualifier controller | Constructor parameter | `cricketCoach` | (`src/main/java/com/example/coach/common/CoachControllerWithQualifiers.java:12`) |
 | Primary demonstration controller | Constructor parameter | `tennisCoach`; its qualifier narrows away the primary cricket bean | (`src/main/java/com/example/coach/common/CoachControllerWithPrimaryAnnotation.java:13`) |
 | Outside-package controller | Constructor parameter | `trackCoach` | (`src/main/java/com/example/outsidebasepackage/ControllerFromOutsideBasePackage.java:13`) |
+| Swim controller | Constructor parameter | `aqua` from `SportConfig` | (`src/main/java/com/example/coach/common/SwimCoachController.java:12`) |
 
 ```mermaid
 flowchart TD
@@ -481,7 +496,7 @@ sequenceDiagram
     Controller-->>MVC: Return String
     MVC-->>Client: 200 OK with response body
 ```
-<!-- Sources: src/main/java/com/example/coach/common/CoachControllerWithQualifiers.java:12, src/main/java/com/example/coach/common/CoachControllerWithQualifiers.java:16, src/main/java/com/example/coach/common/CricketCoach.java:8 -->
+<!-- Sources: src/main/java/com/example/coach/common/CoachControllerWithQualifiers.java:12, src/main/java/com/example/coach/common/CoachControllerWithQualifiers.java:16, src/main/java/com/example/coach/common/CricketCoach.java:12 -->
 
 The injected object is selected during context creation, before the request arrives. The controller does not search the context on every request; it already holds the chosen `Coach` reference.
 
@@ -493,6 +508,7 @@ The injected object is selected during context creation, before the request arri
 |---|---|---|---|---|
 | `spring.application.name` | `coach` | Gives the application a logical name used in logs and integrations; it does not change the URL. | Active | (`src/main/resources/application.properties:1`) |
 | `logging.level.org.springframework` | `info` | Shows Spring messages at `INFO` and above. The earlier `TRACE` setting was temporary diagnostic configuration. | Active | (`src/main/resources/application.properties:2`) |
+| `spring.main.lazy-initialization` | `true` | Makes eligible Spring beans lazy by default, so many application beans are created on first use instead of startup. | Active | (`src/main/resources/application.properties:4`) |
 | `server.port` | Not configured | Uses the normal embedded-server port `8080`. | Framework default | (`src/main/resources/application.properties:1`) |
 | `server.servlet.context-path` | Not configured | Uses the root context path `/`. | Framework default | (`src/main/resources/application.properties:1`) |
 
@@ -507,6 +523,9 @@ With the current properties and no command-line override:
 | `http://localhost:8080/dailyWorkoutsWithQualifier` | Qualifier controller → `cricketCoach` | `Cricket Coach - Practice bowling` | (`src/main/java/com/example/coach/common/CoachControllerWithQualifiers.java:16`) |
 | `http://localhost:8080/dailyWorkoutWithPrimaryAnnotation` | Primary demonstration controller → explicitly qualified `tennisCoach` | `Tennis Coach - Do Tennis things` | (`src/main/java/com/example/coach/common/CoachControllerWithPrimaryAnnotation.java:17`) |
 | `http://localhost:8080/dailyWorkoutFromOutsideBasePackage` | Outside controller → `trackCoach` | `Track Coach - Do track things` | (`src/main/java/com/example/outsidebasepackage/ControllerFromOutsideBasePackage.java:18`) |
+| `http://localhost:8080/checkScope` | Scope controller → two independently resolved primary `cricketCoach` prototypes | `false` | (`src/main/java/com/example/coach/common/ScopeController.java:17`) |
+| `http://localhost:8080/withLifecycle` | Lifecycle controller → one primary `cricketCoach` prototype | `Cricket Coach - Practice bowling` | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:21`) |
+| `http://localhost:8080/doSwimming` | Swim controller → explicitly named `aqua` bean | `Swim Coach: Do swimming things` | (`src/main/java/com/example/coach/common/SwimCoachController.java:16`) |
 
 Be precise about the third path: the current mapping is plural, `/dailyWorkoutsWithQualifier`.
 
@@ -549,7 +568,7 @@ class CoachApplicationTests {
 
 (`src/test/java/com/example/coach/CoachApplicationTests.java:6`)
 
-This test proves that Spring can build the current application context, scan the configured packages, instantiate the eager registered beans, and resolve direct dependencies or lazy proxies as configured. It caught the earlier multiple-`Coach` ambiguity because that failure occurred during context creation.
+This test proves that Spring can build the current application context, scan the configured packages, register the bean definitions, and initialize the infrastructure needed by the test. Because global lazy initialization is active, it does **not** prove that every application bean can be instantiated successfully; some failures may be delayed until the relevant bean is first requested.
 
 It does not prove the endpoint mappings or response bodies. A future focused MVC test could verify those without relying only on manual HTTP requests.
 
@@ -678,11 +697,11 @@ For this documentation run, installed Maven 3.9.16 was used as the verification 
 
 ### 14.1 Lesson snapshot
 
-Today’s experiments answered three connected questions: how Spring chooses one bean, how Java chooses and chains constructors, and when Spring creates a selected bean.
+The 2026-09-16 experiments answered three connected questions: how Spring chooses one bean, how Java chooses and chains constructors, and when Spring creates a selected bean. This snapshot predates the global lazy-initialization property and prototype scope added on 2026-09-17.
 
-| Topic | Current project state | Source |
+| Topic | State verified on 2026-09-16 | Source |
 |---|---|---|
-| Primary bean | `CricketCoach` is the only current primary `Coach`. | (`src/main/java/com/example/coach/common/CricketCoach.java:9`) |
+| Primary bean | `CricketCoach` is the only current primary `Coach`. | (`src/main/java/com/example/coach/common/CricketCoach.java:13`) |
 | Qualifier overriding the default | `CoachControllerWithPrimaryAnnotation` requests `tennisCoach`, so tennis is injected despite primary cricket. | (`src/main/java/com/example/coach/common/CoachControllerWithPrimaryAnnotation.java:13`) |
 | Lazy provider bean | `BaseballCoach` is marked `@Lazy`. | (`src/main/java/com/example/coach/common/BaseballCoach.java:9`) |
 | Lazy injection point | The constructor controller receives its baseball dependency through a lazy proxy. | (`src/main/java/com/example/coach/common/CoachControllerWithConstructorInjection.java:23`) |
@@ -717,7 +736,7 @@ flowchart TD
     classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
     class Type,Qualifier,Filter,Eligible,Count,Inject,Primary,InjectPrimary,Name,InjectNamed,Fail dark
 ```
-<!-- Sources: src/main/java/com/example/coach/common/Coach.java:3, src/main/java/com/example/coach/common/CricketCoach.java:9, src/main/java/com/example/coach/common/TennisCoach.java:7, src/main/java/com/example/coach/common/CoachControllerWithPrimaryAnnotation.java:13 -->
+<!-- Sources: src/main/java/com/example/coach/common/Coach.java:3, src/main/java/com/example/coach/common/CricketCoach.java:13, src/main/java/com/example/coach/common/TennisCoach.java:7, src/main/java/com/example/coach/common/CoachControllerWithPrimaryAnnotation.java:13 -->
 
 #### Results from today’s combinations
 
@@ -793,7 +812,7 @@ The official `@Lazy` API distinguishes component initialization from an injectio
 | `BaseballCoach` and controller class are lazy; parameter is direct | Tennis, cricket, and track start eagerly. | Baseball is created first to satisfy controller construction, then the controller constructor runs. | Observed manually during the lesson. |
 | `BaseballCoach` is lazy; constructor parameter is lazy; controller class is eager | Controller constructor plus tennis, cricket, and track appear at startup; baseball does not. | Baseball is created when `coach.dailyWorkout()` first uses the proxy. | Current implementation; verified 2026-09-16. |
 
-The current implementation follows this sequence:
+The implementation as verified on 2026-09-16 followed this sequence:
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryBorderColor':'#6d5dfc','primaryTextColor':'#e6edf3','lineColor':'#8b949e','secondaryColor':'#161b22','tertiaryColor':'#161b22'}}}%%
@@ -823,7 +842,7 @@ If class-level and parameter-level `@Lazy` are both active, the first request cr
 
 ### 14.5 Observed verification for the final lesson state
 
-The final active state is `@Primary` on cricket, `@Lazy` on baseball, parameter-level `@Lazy` plus `@Qualifier("baseballCoach")` in the constructor controller, and `@Qualifier("tennisCoach")` in the primary demonstration controller.
+The final active state for the 2026-09-16 lesson was `@Primary` on cricket, `@Lazy` on baseball, parameter-level `@Lazy` plus `@Qualifier("baseballCoach")` in the constructor controller, and `@Qualifier("tennisCoach")` in the primary demonstration controller. The 2026-09-17 section below records the later scope and global-lazy changes.
 
 | Time and check | Observed result |
 |---|---|
@@ -886,7 +905,346 @@ The Maven Wrapper was attempted first and again stopped before Maven launched wi
 
     “Which eager bean is requesting this bean, and is that dependency direct or proxied?”
 
-## 15. Official references
+## 15. Lesson update (2026-09-17): global lazy initialization, scopes, lifecycle, and `@Bean`
+
+### 15.1 Lesson snapshot
+
+Today’s lesson connected four parts of the container model: **when beans are created, how many instances Spring creates, which lifecycle callbacks Spring owns, and how a class becomes a bean without `@Component`**.
+
+| Topic | Current project state | Why it matters | Source |
+|---|---|---|---|
+| Global lazy initialization | `spring.main.lazy-initialization=true` is active. | Eligible application beans are normally deferred until first use. | (`src/main/resources/application.properties:4`) |
+| Prototype coach | `CricketCoach` is both the primary `Coach` and prototype-scoped. | Each container request for this bean creates another instance. | (`src/main/java/com/example/coach/common/CricketCoach.java:12`) |
+| Scope comparison | `ScopeController` receives two `Coach` constructor arguments and compares their identities. | It makes singleton reuse versus prototype creation observable. | (`src/main/java/com/example/coach/common/ScopeController.java:12`) |
+| Lifecycle callbacks | `BeanLifeCycleController` declares `@PostConstruct` and `@PreDestroy`. | It demonstrates initialization after injection and destruction during context shutdown. | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:26`) |
+| Java configuration | `SportConfig` returns `new SwimCoach()` from `@Bean("aqua")`. | A class without `@Component` can still produce a managed bean. | (`src/main/java/com/example/coach/config/SportConfig.java:8`) |
+| Named-bean injection | `SwimCoachController` requests `@Qualifier("aqua")`. | An explicit `@Bean` name becomes the name used for qualification. | (`src/main/java/com/example/coach/common/SwimCoachController.java:12`) |
+
+### 15.2 Global lazy initialization
+
+The active property is:
+
+```properties
+spring.main.lazy-initialization=true
+```
+
+This changes the application-wide default: Spring creates eligible beans when they are needed instead of pre-instantiating them during application startup. It does **not** mean that literally every Java object or every piece of Spring infrastructure is lazy. The application context, embedded Tomcat, and infrastructure required to accept requests still start. A bean marked `@Lazy(false)` or otherwise required early can still be initialized at startup. [Spring Boot 4.1.1 lazy-initialization reference](https://docs.spring.io/spring-boot/reference/features/spring-application.html#features.spring-application.lazy-initialization)
+
+The observed request-time sequence is:
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryBorderColor':'#6d5dfc','primaryTextColor':'#e6edf3','lineColor':'#8b949e','secondaryColor':'#161b22','tertiaryColor':'#161b22'}}}%%
+sequenceDiagram
+    autonumber
+    participant Boot as Spring Boot
+    participant Context as ApplicationContext
+    participant Web as Tomcat and MVC
+    participant Client
+    participant Controller as Requested controller
+    participant Coach as Required Coach
+    Boot->>Context: Register bean definitions
+    Context->>Context: Mark eligible definitions lazy by default
+    Context->>Web: Start required web infrastructure
+    Note over Controller,Coach: Custom constructors have not run yet
+    Client->>Web: Send the first matching HTTP request
+    Web->>Context: Request the controller bean
+    Context->>Coach: Resolve direct dependencies as required
+    Context->>Controller: Construct and initialize controller
+    Controller-->>Client: Return the response
+```
+<!-- Sources: src/main/resources/application.properties:4, src/main/java/com/example/coach/CoachApplication.java:10, src/main/java/com/example/coach/common/ScopeController.java:12, src/main/java/com/example/coach/common/BeanLifeCycleController.java:17 -->
+
+| Benefit or cost | Practical effect |
+|---|---|
+| Faster startup can be possible | Work for unused beans moves away from startup. |
+| First-use latency | The first request for a lazy path pays the construction cost. |
+| Delayed configuration failures | A broken lazy bean can remain undiscovered until that feature is used. |
+| Memory planning still matters | The application may eventually create all beans even though they were not all created at startup. |
+| Selective alternative | Keep the normal eager default and use `@Lazy` only on expensive or rarely used components. |
+
+**Rule to remember:** global lazy initialization shifts bean creation; it does not remove bean creation.
+
+### 15.3 Singleton, prototype, and the other Spring scopes
+
+There are not several kinds of prototype. **Prototype is one bean scope** among Spring’s standard scopes.
+
+| Scope | Instance boundary | Typical application |
+|---|---|---|
+| `singleton` | One instance per bean definition in one Spring container; this is the default. | Stateless services, repositories, configuration objects, and most controllers. |
+| `prototype` | A new instance for every request made to the container for that bean. | Short-lived, stateful, per-operation helper objects. |
+| `request` | One instance for one HTTP request. | Request-specific state or processing context. |
+| `session` | One instance for one HTTP session. | User-session preferences or conversational state. |
+| `application` | One instance for one servlet application context. | State shared across the web application. |
+| `websocket` | One instance for one WebSocket session. | Connection-specific WebSocket state. |
+| Thread or custom scope | Registered explicitly; thread scope is not enabled by default. | Specialized lifecycle requirements. |
+
+The framework-defined scope behavior comes from the Spring Framework 7.0.9 bean-scope documentation. [Official bean scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)
+
+#### Why `/checkScope` returns `false`
+
+`ScopeController` is a singleton because it has no explicit scope. Both constructor parameters request `Coach`. `CricketCoach` is the unique primary candidate, so Spring selects cricket for both parameters. Because cricket is prototype-scoped, those two dependency resolutions create two different objects.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryBorderColor':'#6d5dfc','primaryTextColor':'#e6edf3','lineColor':'#8b949e','secondaryColor':'#161b22','tertiaryColor':'#161b22'}}}%%
+sequenceDiagram
+    autonumber
+    participant Client
+    participant MVC as Spring MVC
+    participant Context as ApplicationContext
+    participant Controller as ScopeController
+    participant First as CricketCoach instance 1
+    participant Second as CricketCoach instance 2
+    Client->>MVC: GET /checkScope
+    MVC->>Context: Request lazy ScopeController
+    Context->>First: Resolve first primary Coach
+    Context->>Second: Resolve second primary Coach
+    Context->>Controller: Construct with both references
+    MVC->>Controller: checkScope()
+    Controller->>Controller: firstCoach == secondCoach
+    Controller-->>Client: false
+```
+<!-- Sources: src/main/java/com/example/coach/common/CricketCoach.java:13, src/main/java/com/example/coach/common/CricketCoach.java:14, src/main/java/com/example/coach/common/ScopeController.java:9, src/main/java/com/example/coach/common/ScopeController.java:17 -->
+
+If cricket were singleton-scoped, both resolutions would return the same cached bean and `==` would return `true`.
+
+#### Important singleton-to-prototype limitation
+
+Constructor injection happens when the singleton consumer is created. The current singleton `ScopeController` therefore keeps its two prototype references in fields. Calling `/checkScope` repeatedly compares those same two stored references; it does not perform injection again for every HTTP request.
+
+If a singleton needs a fresh prototype later at runtime, one option is `ObjectProvider`. This is an alternative and is **not implemented** in the current project:
+
+```java
+private final ObjectProvider<CricketCoach> cricketCoaches;
+
+public ExampleService(ObjectProvider<CricketCoach> cricketCoaches) {
+    this.cricketCoaches = cricketCoaches;
+}
+
+public void runOneOperation() {
+    CricketCoach freshCoach = cricketCoaches.getObject();
+}
+```
+
+Each `getObject()` asks the container for a new prototype. A scoped proxy or method injection can solve related cases, but `ObjectProvider` makes the request for a fresh object explicit. [Official scoped dependencies and `ObjectProvider`](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html#beans-factory-scopes-other-injection)
+
+### 15.4 Bean lifecycle callbacks and ownership
+
+The current lifecycle callbacks belong to `BeanLifeCycleController`, not to `CricketCoach`:
+
+| Callback | Current method | When it runs | Source |
+|---|---|---|---|
+| Constructor | `BeanLifeCycleController(Coach coach)` | Spring creates the controller and supplies its dependency. | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:17`) |
+| `@PostConstruct` | `init()` | After construction and dependency injection, before normal use. | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:26`) |
+| Handler | `withLifecycle()` | When `/withLifecycle` is requested. | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:21`) |
+| `@PreDestroy` | `destroy()` | When Spring closes the context and destroys this singleton controller. | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:31`) |
+
+Because global lazy initialization is active, no lifecycle-controller instance exists until something requests it. If `/withLifecycle` is never called and nothing else requests the controller, there is no instance on which either callback can run.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryBorderColor':'#6d5dfc','primaryTextColor':'#e6edf3','lineColor':'#8b949e','secondaryColor':'#161b22','tertiaryColor':'#161b22'}}}%%
+stateDiagram-v2
+    [*] --> DefinitionRegistered: component scan
+    DefinitionRegistered --> Constructed: first bean request
+    Constructed --> Injected: constructor receives Coach
+    Injected --> Initialized: @PostConstruct
+    Initialized --> InUse: /withLifecycle
+    InUse --> Initialized: later requests
+    Initialized --> Destroyed: graceful context close
+    Destroyed --> [*]: @PreDestroy completed
+```
+<!-- Sources: src/main/resources/application.properties:4, src/main/java/com/example/coach/common/BeanLifeCycleController.java:10, src/main/java/com/example/coach/common/BeanLifeCycleController.java:17, src/main/java/com/example/coach/common/BeanLifeCycleController.java:26, src/main/java/com/example/coach/common/BeanLifeCycleController.java:31 -->
+
+`@PreDestroy` is a **container lifecycle callback**, not a garbage-collector callback. Spring Boot registers a JVM shutdown hook so a normal application exit can close the context and invoke standard destruction callbacks. A forced process termination may not allow that sequence to finish. [Spring Boot 4.1.1 application exit](https://docs.spring.io/spring-boot/reference/features/spring-application.html#features.spring-application.application-exit)
+
+#### Why Spring destroys singletons but not prototypes automatically
+
+Spring stores singleton instances in its singleton cache and owns their shared context-wide lifetime. When the context closes, it knows which singleton beans it owns and can invoke their destruction callbacks.
+
+For a prototype, Spring creates, configures, initializes, and hands the object to the requesting client. It does not keep a separate prototype-instance cache afterward. Retaining every prototype until shutdown could prevent garbage collection, grow without a useful bound, and still would not tell Spring when each client had finished using its object. Spring therefore invokes initialization callbacks for prototypes but not configured destruction callbacks; the client must release any expensive resources. [Official prototype lifecycle rule](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html#beans-factory-scopes-prototype)
+
+“Spring does not retain the prototype” needs one qualification: the **dependent Java object can retain it** through a normal field reference.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryBorderColor':'#6d5dfc','primaryTextColor':'#e6edf3','lineColor':'#8b949e','secondaryColor':'#161b22','tertiaryColor':'#161b22'}}}%%
+graph TD
+    Context[ApplicationContext] --> Definition[cricketCoach bean definition]
+    Context --> Controller[Singleton BeanLifeCycleController]
+    Controller --> Field[coach field]
+    Field --> Prototype[CricketCoach prototype instance]
+    Definition --> Future[Recipe for future instances]
+    classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    class Context,Definition,Controller,Field,Prototype,Future dark
+```
+<!-- Sources: src/main/java/com/example/coach/common/CricketCoach.java:14, src/main/java/com/example/coach/common/BeanLifeCycleController.java:15, src/main/java/com/example/coach/common/BeanLifeCycleController.java:17 -->
+
+The container retains the bean definition and its singleton controller. The controller’s `coach` field keeps that particular prototype reachable. A later request for `cricketCoach` creates another prototype instead of reusing the stored one.
+
+### 15.5 `@Configuration` and `@Bean`
+
+`SwimCoach` deliberately has no `@Component` annotation. The configuration method creates it:
+
+```java
+@Configuration
+public class SportConfig {
+
+    @Bean("aqua")
+    public Coach swimCoach() {
+        return new SwimCoach();
+    }
+}
+```
+
+The `new SwimCoach()` call is special only because the returned object comes from a processed `@Bean` method. Spring registers that returned object as a managed bean. A random `new SwimCoach()` elsewhere would remain an ordinary Java object outside Spring’s lifecycle. (`src/main/java/com/example/coach/config/SportConfig.java:8`)
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryBorderColor':'#6d5dfc','primaryTextColor':'#e6edf3','lineColor':'#8b949e','secondaryColor':'#161b22','tertiaryColor':'#161b22'}}}%%
+flowchart LR
+    Scan[Component scan] --> Config[SportConfig configuration bean]
+    Config --> Method[Bean method swimCoach]
+    Method --> Create[new SwimCoach]
+    Create --> Aqua[Register managed bean named aqua]
+    Controller[SwimCoachController] --> Qualifier[Qualifier aqua]
+    Qualifier --> Aqua
+    Aqua --> Endpoint[GET /doSwimming]
+    classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    class Scan,Config,Method,Create,Aqua,Controller,Qualifier,Endpoint dark
+```
+<!-- Sources: src/main/java/com/example/coach/CoachApplication.java:6, src/main/java/com/example/coach/config/SportConfig.java:8, src/main/java/com/example/coach/config/SportConfig.java:11, src/main/java/com/example/coach/common/SwimCoach.java:6, src/main/java/com/example/coach/common/SwimCoachController.java:12, src/main/java/com/example/coach/common/SwimCoachController.java:16 -->
+
+#### Bean-name rules
+
+| Declaration | Registered name available to `@Qualifier` |
+|---|---|
+| `@Bean public Coach swimCoach()` | `swimCoach`, because the method name is the default. |
+| `@Bean("aqua") public Coach swimCoach()` | `aqua`, because the explicit name replaces the default name. This is the current code. |
+| `@Bean({"aqua", "swimCoach"})` | `aqua` as the primary name and `swimCoach` as an alias for the same bean. |
+| `@Component class SwimCoach` | Normally `swimCoach`, generated from the class name by component scanning. This is **not** the current registration method. |
+
+Therefore, the current `@Qualifier("aqua")` is correct. `@Qualifier("SwimCoach")` does not automatically refer to this bean, and `@Qualifier("swimCoach")` would require that name or alias to be registered. [Official `@Bean` naming and aliases](https://docs.spring.io/spring-framework/reference/core/beans/java/bean-annotation.html)
+
+#### `@Component` versus `@Bean`
+
+| Question | `@Component` and stereotypes | `@Configuration` plus `@Bean` |
+|---|---|---|
+| How is the bean found? | Classpath scanning discovers the annotated class. | Scanning discovers the configuration class, then Spring processes its bean methods. |
+| Best fit | Application classes you own with straightforward construction. | Third-party classes, factory or builder APIs, explicit customization, or multiple configured instances. |
+| Where is Spring metadata placed? | On the implementation class. | In a separate configuration class; the implementation can remain a plain Java class. |
+| Bean naming | Generated from the component class unless explicitly named. | Method name by default or the explicit `@Bean` name and aliases. |
+| Construction control | Spring invokes the class constructor. | Your method decides exactly how the object is created and configured. |
+
+Real applications commonly use `@Bean` for an external library class that cannot be edited, a customized HTTP client, an object built through a vendor builder, or two instances of the same type configured for different systems. `@Configuration` also gives Spring full configuration-class behavior for calls between bean methods. [Official `@Bean` and `@Configuration` concepts](https://docs.spring.io/spring-framework/reference/core/beans/java/basic-concepts.html)
+
+**Selection rule:** use a component stereotype for a straightforward application-owned class; use `@Bean` when creation itself is part of the configuration.
+
+### 15.6 Current request paths added today
+
+| Request | First-use work with global lazy initialization | Response | Source |
+|---|---|---|---|
+| `GET /checkScope` | Creates `ScopeController` plus two primary prototype cricket instances. | `false` | (`src/main/java/com/example/coach/common/ScopeController.java:17`) |
+| `GET /withLifecycle` | Creates one prototype cricket, constructs the singleton lifecycle controller, and runs its `@PostConstruct`. | `Cricket Coach - Practice bowling` | (`src/main/java/com/example/coach/common/BeanLifeCycleController.java:21`) |
+| `GET /doSwimming` | Invokes the lazy `aqua` bean factory path and constructs `SwimCoach`. | `Swim Coach: Do swimming things` | (`src/main/java/com/example/coach/common/SwimCoachController.java:16`) |
+
+### 15.7 Observed verification
+
+| Date and check | Observed result |
+|---|---|
+| 2026-09-17, `./mvnw.cmd test -q` | Wrapper stopped before Maven launched with the known `Cannot index into a null array` and `Cannot start maven from wrapper` messages. |
+| 2026-09-17, installed Maven 3.9.16 `mvn test -q` | Exit code `0`; the Spring Boot 4.1.1 context started on Java 26.0.1. |
+| Test startup logs with global lazy initialization | No custom controller or coach constructor logs appeared during context startup. |
+| Temporary application on port `8081` | Started successfully without custom constructor logs before the first request. |
+| First `GET /checkScope` | Returned HTTP `200` with `false`; logs showed two `CricketCoach constructor called` entries. |
+| First `GET /withLifecycle` | Returned HTTP `200` with the cricket response; logs showed another cricket construction followed by `Constructor init`. |
+| First `GET /doSwimming` | Returned HTTP `200` with `Swim Coach: Do swimming things`; logs showed `Swim Coach constructor`. |
+| First constructor and qualifier requests | `/dailyWorkoutWithConstructor` returned baseball and `/dailyWorkoutsWithQualifier` returned cricket, both with HTTP `200`. |
+| Graceful shutdown | Tomcat completed graceful shutdown and `BeanLifeCycleController` logged `Constructor destroy`; port `8081` was free afterward. |
+
+The lifecycle shutdown result applies to the singleton controller that actually declares `@PreDestroy`. The rule that prototype destruction callbacks are not invoked automatically is documentation-derived; the current `CricketCoach` does not declare such a callback.
+
+### 15.8 Common mistakes and active recall
+
+| Mistake | Correct mental model |
+|---|---|
+| “Global lazy means nothing is created at startup.” | Required framework infrastructure still starts, and explicit or early dependencies can still create beans. |
+| “Prototype means one new object for every controller method call.” | It means one new object for every request made to the container. Direct constructor injection into a singleton happens once. |
+| “The application context keeps and reuses every prototype.” | It keeps the bean definition; the requesting object may keep an individual prototype reference. Future container requests create new objects. |
+| “`@PreDestroy` runs when garbage collection happens.” | It is a Spring destruction callback normally triggered by context shutdown; it is unrelated to GC timing. |
+| “Prototype beans get the same destruction handling as singletons.” | Spring initializes prototypes but does not invoke their configured destruction callbacks automatically. |
+| “The class name is always the bean name.” | Component scanning and `@Bean` methods have different naming rules; the current explicit bean name is `aqua`. |
+| “Using `new` inside `@Bean` means the object is unmanaged.” | The object returned by the processed bean method is registered and managed; an unrelated manual `new` is not. |
+
+1. **What does `spring.main.lazy-initialization=true` change?**
+
+   It makes eligible beans lazy by default, shifting construction to first use.
+
+2. **Why were there no custom constructor logs during startup today?**
+
+   None of those lazy application beans was required to start the context and web infrastructure.
+
+3. **What does singleton scope guarantee?**
+
+   One shared instance per bean definition in one Spring container.
+
+4. **What does prototype scope guarantee?**
+
+   A new instance for each request made to the container for that bean.
+
+5. **Why did `/checkScope` return `false`?**
+
+   Its two constructor dependencies independently requested the primary prototype cricket bean and received two objects.
+
+6. **Will every later `/checkScope` call inject two more coaches?**
+
+   No. The singleton controller already stores the original two references.
+
+7. **How can a singleton ask for a fresh prototype later?**
+
+   Request one on demand through a mechanism such as `ObjectProvider`.
+
+8. **When does `@PostConstruct` run?**
+
+   After construction and dependency injection, before the bean is used normally.
+
+9. **When did the current `@PreDestroy` run?**
+
+   When the application context closed during graceful shutdown.
+
+10. **Does garbage collection invoke `@PreDestroy`?**
+
+    No. Garbage collection and Spring lifecycle callbacks are separate mechanisms.
+
+11. **Why does Spring track singletons for destruction?**
+
+    The container caches and owns their context-wide lifetime, so shutdown gives it a clear end point.
+
+12. **Why does Spring not automatically destroy prototypes?**
+
+    It hands each instance to a client and does not know when that client has finished; retaining every instance would also keep them reachable.
+
+13. **What does the context retain for a prototype bean?**
+
+    The bean definition or creation recipe, not a reusable prototype-instance cache.
+
+14. **Can a prototype still remain in memory?**
+
+    Yes. A dependent object can retain it through a normal Java field reference.
+
+15. **What is the current `SwimCoach` bean name?**
+
+    `aqua`.
+
+16. **What would its name be if the annotation were plain `@Bean`?**
+
+    `swimCoach`, matching the method name.
+
+17. **Why can `SwimCoach` be a bean without `@Component`?**
+
+    `SportConfig.swimCoach()` returns it from a processed `@Bean` method.
+
+18. **When is `@Bean` preferable to `@Component`?**
+
+    When construction requires explicit configuration, the class cannot be edited, a factory or builder is needed, or multiple differently configured instances are required.
+
+## 16. Official references
 
 - [Spring Boot 4.1.1 API — `@SpringBootApplication`](https://docs.spring.io/spring-boot/api/java/org/springframework/boot/autoconfigure/SpringBootApplication.html)
 - [Spring Framework 7.0 — IoC container and beans](https://docs.spring.io/spring-framework/reference/core/beans/introduction.html)
@@ -897,7 +1255,11 @@ The Maven Wrapper was attempted first and again stopped before Maven launched wi
 - [Spring Framework 7.0 — `@Primary` and `@Fallback`](https://docs.spring.io/spring-framework/reference/core/beans/annotation-config/autowired-primary.html)
 - [Spring Framework 7.0 — lazy-initialized beans](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-lazy-init.html)
 - [Spring Framework 7.0 API — `@Lazy`](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/context/annotation/Lazy.html)
+- [Spring Boot 4.1.1 — global lazy initialization and application exit](https://docs.spring.io/spring-boot/reference/features/spring-application.html)
 - [Spring Framework 7.0 — bean scopes](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html)
+- [Spring Framework 7.0 — `@PostConstruct` and `@PreDestroy`](https://docs.spring.io/spring-framework/reference/core/beans/annotation-config/postconstruct-and-predestroy-annotations.html)
+- [Spring Framework 7.0 — using `@Bean`, bean names, and aliases](https://docs.spring.io/spring-framework/reference/core/beans/java/bean-annotation.html)
+- [Spring Framework 7.0 — basic `@Bean` and `@Configuration` concepts](https://docs.spring.io/spring-framework/reference/core/beans/java/basic-concepts.html)
 - [Spring Framework 7.0 — `@ResponseBody` and `@RestController`](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/responsebody.html)
 - [Java SE 26 Language Specification — constructor bodies and invocations](https://docs.oracle.com/javase/specs/jls/se26/html/jls-8.html#jls-8.8.7)
 - [Java SE 26 Language Specification — default constructors](https://docs.oracle.com/javase/specs/jls/se26/html/jls-8.html#jls-8.8.9)

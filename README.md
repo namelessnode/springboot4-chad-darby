@@ -25,7 +25,7 @@ chadDarby/
 | Section | Project | Main topics | Status |
 |---|---|---|---|
 | 01 — Spring Boot Basics | [`springBootApp`](01-spring-boot-basics/springBootApp/) | Application startup, Spring MVC endpoints, external properties, embedded server settings, Actuator, and context testing | Complete |
-| 02 — Spring Boot Core | [`coach`](02-spring-boot-core/coach/) | IoC, dependency injection, component scanning, injection styles, qualifiers, primary beans, constructors, lazy initialization, and REST controllers | In progress |
+| 02 — Spring Boot Core | [`coach`](02-spring-boot-core/coach/) | IoC, dependency injection, bean selection, global lazy initialization, scopes, lifecycle callbacks, Java configuration, and REST controllers | In progress |
 
 ## Section 01 — Spring Boot Basics
 
@@ -41,7 +41,7 @@ A first Spring Boot web application with three GET endpoints, custom values read
 
 ### `coach`
 
-A Spring Core learning project built around a `Coach` interface and four component implementations. It demonstrates the application context, constructor and setter injection, explicit component-scan roots, multiple-bean ambiguity, `@Qualifier` versus `@Primary`, Java constructor rules, eager singleton creation, lazy bean definitions, lazy dependency proxies, and REST request flow.
+A Spring Core learning project built around a `Coach` interface, four component implementations, and a `SwimCoach` registered through `@Bean`. It demonstrates the application context, constructor and setter injection, explicit scan roots, bean selection, global and selective lazy initialization, singleton and prototype scopes, lifecycle callbacks, Java-based configuration, and REST request flow.
 
 - [Detailed project notes](02-spring-boot-core/coach/notes.md)
 - [Maven configuration](02-spring-boot-core/coach/pom.xml)
