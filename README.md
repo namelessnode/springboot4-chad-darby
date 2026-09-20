@@ -16,7 +16,7 @@ chadDarby/
         └── notes.md
 ```
 
-- **Section folders** use course order: `01-...`, `02-...`, `03-...`.
+- **Section folders** use course order: `01-...`, `02-...`, `03-...`, `04-...`.
 - **Project notes** contain detailed code, properties, commands, observed results, mistakes, and recall questions.
 - **Course review** connects concepts across projects without duplicating all project details.
 
@@ -26,7 +26,10 @@ chadDarby/
 |---|---|---|---|
 | 01 — Spring Boot Basics | [`springBootApp`](01-spring-boot-basics/springBootApp/) | Application startup, Spring MVC endpoints, external properties, embedded server settings, Actuator, and context testing | Complete |
 | 02 — Spring Boot Core | [`coach`](02-spring-boot-core/coach/) | IoC, dependency injection, bean selection, global lazy initialization, scopes, lifecycle callbacks, Java configuration, and REST controllers | Complete |
-| 03 — Hibernate and Spring Data JPA CRUD | [`cruddemo-student`](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/) | MySQL setup, entity mapping, generated IDs, manual DAO CRUD, transactions, HQL/JPQL, updates/deletes, Hibernate SQL diagnostics, and automatic schema management | In progress |
+| 03 — Hibernate and Spring Data JPA CRUD | [`cruddemo-student`](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/) | MySQL setup, entity mapping, generated IDs, manual DAO CRUD, transactions, HQL/JPQL, updates/deletes, Hibernate SQL diagnostics, and automatic schema management | Complete |
+| 04 — Spring REST CRUD | [`01-spring-boot-rest-crud`](04-springboot-rest-crud/01-spring-boot-rest-crud/) | Spring MVC routing, Jackson 3 serialization, path variables, custom exceptions, global controller advice, `ResponseEntity`, `@ResponseStatus`, and HTTP status codes | In progress |
+| 04 — Spring REST CRUD | [`02-spring-boot-rest-crud-employee`](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/) | Layered REST/JPA CRUD, service transactions, generated IDs, PUT versus PATCH, Jackson partial updates, and transactional deletion | In progress |
+| 04 — Spring REST CRUD | [`03-spring-boot-rest-crud-employee-with-jpa-repository`](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/) | Spring Data JPA repository proxies, inherited CRUD methods, `JpaRepository` generics, derived query names, query keywords, and return types | In progress |
 
 ## Section 01 — Spring Boot Basics
 
@@ -61,6 +64,51 @@ The first data-persistence project connects Spring Boot to the local `student_tr
 - [DAO implementation](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/src/main/java/com/example/cruddemo/dao/StudentDAOImpl.java)
 - [Application properties](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/src/main/resources/application.properties)
 - [Course SQL scripts](03-spring-boot-hibernate-jpa-crud/00-starter-sql-scripts/00-starter-sql-scripts/)
+
+## Section 04 — Spring REST CRUD
+
+### `01-spring-boot-rest-crud`
+
+The first Spring REST project starts a Spring MVC application and currently exposes `/test/hello`, `GET /api/students`, and `GET /api/students/{studentId}`. The lessons trace startup and request dispatch, then demonstrate POJO-to-JSON serialization, in-memory data initialized with `@PostConstruct`, GET-specific mappings, URI variables and conversion, duplicate-mapping rules, custom exceptions, structured error bodies, and the refactoring of local handlers into global `@ControllerAdvice`. The notes compare `@ControllerAdvice` with `@RestControllerAdvice`, distinguish JSON status data from the real HTTP status, and compare `ResponseEntity` with `@ResponseStatus`. Invalid indexes return `404`; non-numeric indexes return `400` through the current fallback handler.
+
+- [Detailed project notes](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md)
+- [Maven configuration](04-springboot-rest-crud/01-spring-boot-rest-crud/pom.xml)
+- [Application entry point](04-springboot-rest-crud/01-spring-boot-rest-crud/src/main/java/com/example/rest/RestApplication.java)
+- [Demo REST controller](04-springboot-rest-crud/01-spring-boot-rest-crud/src/main/java/com/example/rest/controller/DemoRestController.java)
+- [Student REST controller](04-springboot-rest-crud/01-spring-boot-rest-crud/src/main/java/com/example/rest/controller/StudentRestController.java)
+- [Global student exception handler](04-springboot-rest-crud/01-spring-boot-rest-crud/src/main/java/com/example/rest/controller/StudentRestExceptionHandler.java)
+- [Student POJO](04-springboot-rest-crud/01-spring-boot-rest-crud/src/main/java/com/example/rest/entity/Student.java)
+- [Student-not-found exception](04-springboot-rest-crud/01-spring-boot-rest-crud/src/main/java/com/example/rest/entity/StudentNotFoundException.java)
+- [Student error response](04-springboot-rest-crud/01-spring-boot-rest-crud/src/main/java/com/example/rest/entity/StudentErrorResponse.java)
+- [Application properties](04-springboot-rest-crud/01-spring-boot-rest-crud/src/main/resources/application.properties)
+
+### `02-spring-boot-rest-crud-employee`
+
+This project connects REST endpoints to the `employee_directory` MySQL database through a controller-service-DAO architecture. The current lesson code implements GET, POST, PUT, PATCH, and DELETE; demonstrates JSON request-body binding, generated IDs, map-based partial updates with Spring Boot's Jackson 3 `JsonMapper`, and ID-based transactional deletion. The detailed notes preserve the current missing-ID limitation and distinguish observed behavior from code-derived behavior.
+
+- [Detailed project notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md)
+- [Maven configuration](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/pom.xml)
+- [Employee REST controller](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/src/main/java/com/example/cruddemo/rest/EmployeeRestController.java)
+- [Service contract](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/src/main/java/com/example/cruddemo/service/EmployeeService.java)
+- [Service implementation](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/src/main/java/com/example/cruddemo/service/EmployeeServiceImpl.java)
+- [DAO contract](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/src/main/java/com/example/cruddemo/dao/EmployeeDao.java)
+- [DAO implementation](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/src/main/java/com/example/cruddemo/dao/EmployeeDaoImpl.java)
+- [Employee entity](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/src/main/java/com/example/cruddemo/entity/Employee.java)
+- [Application properties](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/src/main/resources/application.properties)
+- [Employee database script](04-springboot-rest-crud/spring-boot-employee-sql-script/employee-directory.sql)
+
+### `03-spring-boot-rest-crud-employee-with-jpa-repository`
+
+This project replaces the hand-written `EmployeeDao`/`EmployeeDaoImpl` with `EmployeeRepository extends JpaRepository<Employee, Integer>`. It demonstrates how Spring Boot discovers repository interfaces, how Spring Data creates a runtime proxy and routes inherited CRUD methods to its JPA base implementation, why `findById()` is inherited while employee-specific methods such as `findByEmail()` must be declared, and how the derived-query naming grammar combines entity properties with keywords such as `And`, `Containing`, and `IgnoreCase`. The notes include a practical keyword reference, return-type rules, transaction behavior, the boundary between derived methods and `@Query`, and observed clean-build and read-only HTTP verification.
+
+- [Detailed project notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md)
+- [Maven configuration](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/pom.xml)
+- [Employee repository](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/src/main/java/com/example/cruddemo/repository/EmployeeRepository.java)
+- [Service implementation](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/src/main/java/com/example/cruddemo/service/EmployeeServiceImpl.java)
+- [Employee REST controller](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/src/main/java/com/example/cruddemo/rest/EmployeeRestController.java)
+- [Employee entity](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/src/main/java/com/example/cruddemo/entity/Employee.java)
+- [Application properties](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/src/main/resources/application.properties)
+- [Employee database script](04-springboot-rest-crud/spring-boot-employee-sql-script/employee-directory.sql)
 
 ## How to study from this repository
 

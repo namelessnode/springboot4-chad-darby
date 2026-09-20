@@ -9,6 +9,9 @@ This file is the short revision layer across all course sections. Detailed code,
 | 01 — `springBootApp` | 4.1.1 | 26 | Maven Wrapper 3.9.16 | [Project notes](01-spring-boot-basics/springBootApp/notes.md) |
 | 02 — `coach` | 4.1.1 | 26 | Maven Wrapper 3.9.16 | [Project notes](02-spring-boot-core/coach/notes.md) |
 | 03 — `cruddemo-student` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md) |
+| 04 — `01-spring-boot-rest-crud` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md) |
+| 04 — `02-spring-boot-rest-crud-employee` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md) |
+| 04 — `03-spring-boot-rest-crud-employee-with-jpa-repository` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md) |
 
 ## 01 — Spring Boot Basics
 
@@ -282,6 +285,247 @@ The earlier update/delete experiments are now commented out. The active `Command
 
 [Review the complete setup, DAO, transaction, MySQL counter, and custom-query notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md).
 
+## 04 — Spring REST CRUD
+
+### The first request path
+
+The first endpoint is `http://localhost:8080/test/hello`. Boot uses port `8080` and root context path `/` because neither setting is overridden. Spring then combines the controller-level `/test` mapping with the method-level `/hello` mapping.
+
+**Recall rule:** server address + context path + class mapping + method mapping = complete endpoint URL.
+
+### Startup and dispatch
+
+`RestApplication.main()` calls `SpringApplication.run(...)`. `@SpringBootApplication` enables Boot configuration, auto-configuration, and component scanning. Because `DemoRestController` is below the `com.example.rest` package, it is discovered and registered as a singleton controller bean.
+
+Embedded Tomcat accepts the HTTP request and passes it to Spring MVC's `DispatcherServlet`. The dispatcher uses handler-mapping and handler-adapter infrastructure to locate and invoke `DemoRestController.hello()`, then writes `Hello World` into the response body.
+
+**Recall rule:** Tomcat receives; `DispatcherServlet` coordinates; the mapping selects; the controller handles; a message converter writes.
+
+### `@RestController` and request mappings
+
+`@RestController` is effectively `@Controller` plus default `@ResponseBody` semantics. Therefore a returned `String` becomes response content instead of a logical view name.
+
+`@RequestMapping` can restrict path, HTTP method, parameters, headers, consumed media types, and produced media types. The hello endpoint specifies only paths, so it is not GET-only. The student controller now demonstrates `@GetMapping`, the GET-specific shortcut for `@RequestMapping(method = RequestMethod.GET)`.
+
+### Message conversion and JSON binding
+
+Spring MVC `HttpMessageConverter` implementations bridge Java values and HTTP bodies. The hello endpoint's `String` response uses string conversion. The student endpoints now prove Jackson serialization by returning `Student` and `List<Student>` values.
+
+For POJO endpoints:
+
+- **Serialization/marshalling** converts a Java object to JSON.
+- **Deserialization/unmarshalling** converts JSON into a Java object.
+- `@RequestBody` asks Spring to read the request body into the declared Java parameter type.
+- `Content-Type` describes what the client sent; `Accept` describes what it can receive.
+
+The Spring MVC starter brings Jackson transitively. This Boot 4.1.1 project resolves Jackson 3.1.5 and uses the Jackson 3 `JsonMapper` model; older Jackson 2 material commonly refers to `ObjectMapper`.
+
+**Recall rule:** routing chooses the method; message conversion chooses the representation; Jackson performs JSON object mapping.
+
+### Student data initialization and JSON responses
+
+`StudentRestController` uses `@PostConstruct` to add three students after bean construction and dependency injection but before the singleton controller is placed into service. This is convenient demonstration data, not persistent storage; a new application context creates a new list.
+
+`GET /api/students` returns `List<Student>`. Spring handles the controller return value, and Jackson serializes the list as a JSON array whose objects contain `firstName` and `lastName`, derived from the POJO accessors.
+
+**Recall rule:** the controller returns Java values; the message converter and Jackson produce the HTTP JSON representation.
+
+### URI templates and `@PathVariable`
+
+In `/api/students/{studentId}`, `{studentId}` captures one path segment. `@PathVariable` binds the captured text to a Java method parameter, and Spring converts it to the declared type before method invocation.
+
+`@PathVariable("studentId")`, `@PathVariable(name = "studentId")`, and `@PathVariable(value = "studentId")` are equivalent because `name` and `value` are aliases. With an explicit annotation name, the Java parameter may have another valid name, such as `int id`. Without an explicit name, the discoverable Java parameter name must match the URI variable.
+
+**Recall rule:** `{studentId}` names the URL value; the annotation connects that value to the Java parameter; the Java type controls conversion.
+
+### Mapping selection versus Java type conversion
+
+Spring selects a handler from mapping conditions such as path and HTTP method before converting path variables. Two GET methods with the same effective `/students/{studentId}` mapping therefore conflict during application startup even if one parameter is `int` and the other is `String`.
+
+The `{variable:regex}` convention can create distinct routes, such as a numeric `{studentId:\d+}` route and an alphabetic `{studentCode:[A-Za-z]+}` route. The regex distinguishes the route; type conversion still happens afterward. Distinct semantic paths such as `/students/id/{id}` and `/students/code/{code}` can be clearer.
+
+The current method uses `students.get(studentId)`, so the value is a zero-based list index rather than a database ID. It now validates negative and out-of-range values before accessing the list. Runtime checks observed `400` for non-numeric `abcd` and a controlled `404` for invalid numeric indexes such as `-1` and `3`.
+
+### REST exception handling
+
+The current error flow separates four responsibilities:
+
+1. `getStudent()` detects an invalid index.
+2. `StudentNotFoundException` represents the application-specific failure.
+3. An `@ExceptionHandler` method translates the exception into an HTTP response.
+4. `StudentErrorResponse` defines the JSON error-body contract.
+
+An empty `@ExceptionHandler` annotation can infer its mapped exception from the method's exception parameter. The type may instead be declared explicitly, for example `@ExceptionHandler(StudentNotFoundException.class)`. It does not need to appear in both places; retain the parameter when the method needs the exception message or cause.
+
+For multiple exception mappings, annotation braces list alternatives: `@ExceptionHandler({A.class, B.class})`. The method may take one common parent such as `RuntimeException` or `Exception`, or omit the exception parameter if it does not need details. Java multi-catch syntax such as `A | B ex` is not valid in a method parameter, and two exception parameters do not mean “either one.” Separate handlers are usually clearer when the failures require different statuses or bodies.
+
+`ResponseEntity<StudentErrorResponse>` means the HTTP body is a `StudentErrorResponse`; the wrapper also controls headers and the real HTTP status. A JSON field named `status` is only body data. The current code sets both the body field and `ResponseEntity` status to `404`, but only the latter controls the network response status.
+
+**Status rule:** use `400` for invalid request input, `404` for an absent requested resource, `409` for a state conflict, and `500` for an unexpected server failure. Choose based on the failure's meaning to the client.
+
+The handlers have now been moved from `StudentRestController` into a global `StudentRestExceptionHandler` annotated with `@ControllerAdvice`. The current broad `Exception` fallback demonstrates conversion errors, but it can also catch failures from other controllers, misclassify server defects as `400`, and expose raw internal messages. Larger applications normally use narrow expected-error mappings and a safe logged `500` fallback. Spring Framework 7 also offers `ProblemDetail`, `ErrorResponse`, and `ResponseEntityExceptionHandler` for standardized RFC 9457 error responses.
+
+**Recall rule:** throw a meaningful Java exception inside the application; translate it at the web boundary into a safe body and an accurate HTTP status.
+
+### Global controller advice and response status
+
+`@ControllerAdvice` is a Spring component that shares `@ExceptionHandler`, `@InitBinder`, and `@ModelAttribute` methods across all or selected controllers. The bean is discovered when the context starts, but an exception-handler method runs only when a compatible exception occurs. Controller-local handlers are checked before global advice.
+
+`@RestControllerAdvice` combines `@ControllerAdvice` with `@ResponseBody`. It is a convenient semantic fit for REST APIs, but it does not create an error DTO automatically. The current plain `@ControllerAdvice` works because its methods return `ResponseEntity<StudentErrorResponse>`, which already represents a response body, status, and optional headers.
+
+Keep these three concerns separate:
+
+| Mechanism | Effect |
+|---|---|
+| `response.setStatus(404)` | Sets ordinary data in the JSON DTO only. |
+| `ResponseEntity.status(NOT_FOUND)` | Sets the real HTTP response status and supports dynamic status/headers. |
+| `@ResponseStatus(NOT_FOUND)` | Declares a fixed real HTTP status on a handler method or exception class. |
+
+When `@RestControllerAdvice` returns a DTO directly, `@ResponseStatus` can replace the status carried by `ResponseEntity`. It does not populate the DTO's `status` property: the current primitive `int` would remain `0` unless it is set or the DTO is redesigned. With plain `@ControllerAdvice`, a directly returned DTO also needs `@ResponseBody`; returning `ResponseEntity` avoids that requirement.
+
+Advice may be scoped through `basePackages`/`value`, `basePackageClasses`, `assignableTypes`, or `annotations`. Multiple selectors use OR semantics. `@Order` controls precedence among advice beans; it does not select controllers. “Global” need not mean one huge file—split advice by domain or concern and avoid ambiguous overlaps.
+
+**Recall rule:** advice controls where exception translation is shared; response-body semantics control how a Java value becomes content; `ResponseEntity` or `@ResponseStatus` controls the real HTTP status.
+
+### Employee REST + JPA layering
+
+The employee project introduces a layered request path:
+
+```text
+HTTP request -> EmployeeRestController -> EmployeeService -> EmployeeDao -> EntityManager -> MySQL
+```
+
+The controller owns HTTP concerns, the service owns use-case and transaction boundaries, the DAO owns persistence operations, and the entity maps Java state to the database table. Constructor injection keeps each dependency explicit and easy to replace in focused tests.
+
+`@Service` is a specialized `@Component`: it gives the class service-layer meaning and makes it eligible for component scanning. It does not make every method transactional automatically.
+
+**Recall rule:** a stereotype registers and describes the bean; `@Transactional` defines transaction behavior.
+
+### Transactions at the service boundary
+
+`EmployeeServiceImpl.save()` and `deleteById()` carry `@Transactional`, while the read methods do not. JPA write operations such as merge and remove need an active transaction. Ordinary reads can execute without a method-level transaction in this lesson, although real applications may use read-only transactions when a use case requires one consistent persistence context, lazy-loading access, or several coordinated reads.
+
+The service layer is a common transaction boundary because one business operation may eventually coordinate several DAO calls. Spring normally applies `@Transactional` through a proxy around an externally invoked service method: begin transaction, run the method, commit on success, or roll back according to the rollback rules after failure.
+
+**Recall rule:** make the transaction cover the complete business operation, not merely one SQL statement.
+
+### `@RequestBody`, omitted fields, and generated IDs
+
+`@RequestBody Employee employee` asks Spring MVC to read the HTTP body and use an HTTP message converter—Jackson for JSON—to construct and populate an `Employee`. The annotation requires a body by default; it does not require every possible JSON property.
+
+The entity's generated ID uses nullable `Integer`, so JSON may omit `id` and the Java value remains `null`. The current project has no validation annotation requiring all four entity properties, and the SQL columns other than the ID are nullable. A Java class having four fields therefore does not mean every request must contain four properties.
+
+For POST, the controller explicitly calls `employee.setId(null)`. Any client-supplied ID is ignored, and MySQL's `AUTO_INCREMENT` column supplies the value through `GenerationType.IDENTITY`. This project is not using a database sequence.
+
+**Recall rule:** `@RequestBody` controls body conversion; validation annotations and database constraints separately control what values are acceptable.
+
+### Why POST and PUT share `save()`
+
+Both controller methods call the same service `save()`, which reaches `EntityManager.merge()`. Spring MVC knows whether POST or PUT was sent and selects the corresponding controller mapping; JPA sees only entity state and does not know which HTTP method initiated the call.
+
+`merge()` copies state into a managed entity and returns that managed instance. A null/new identity can lead to an insert; an identity representing existing state can lead to an update. The current POST route forces a null ID. The current PUT route does not verify that an ID exists, so a missing or unknown ID can result in insert-like behavior rather than guaranteed update-only semantics.
+
+**Recall rule:** HTTP routing chooses the controller operation; persistence state and ID determine what the ORM does afterward.
+
+### PATCH, map presence, and `JsonMapper`
+
+`PATCH /api/employees/{employeeId}` identifies the employee in the URL and carries only requested field changes in a `Map<String, Object>` body. This preserves property presence: `{}` contains no changes, while `{"email": null}` explicitly contains the `email` key with a null value. Binding directly to a fresh `Employee` would normally represent both omitted reference fields and explicit nulls as Java `null`, unless additional presence tracking is designed.
+
+The controller rejects `id` in the patch map because the path is the authoritative identity and generated primary keys are not treated as mutable employee data. It then calls `jsonMapper.updateValue(existingEmployee, patchPayload)` to apply the supplied properties. `JsonMapper` belongs to Jackson 3, while Spring Boot auto-configures and manages the instance injected into the controller. `updateValue()` changes Java object state; transactional `save()` performs persistence afterward.
+
+**Recall rule:** the URL chooses what to update, the patch document says what to change, Jackson applies the changes in memory, and the service transaction persists them.
+
+### PUT versus PATCH
+
+PUT conventionally communicates replacement of target state and is idempotent. PATCH communicates a set of partial modifications and is not inherently guaranteed to be idempotent, although repeating this project's simple property assignments normally reaches the same state. The same Java operations could be placed behind PUT, but doing so would make omitted-field meaning surprising to clients.
+
+**Recall rule:** PUT describes the desired resource state; PATCH describes changes to the current state.
+
+### Transactional DELETE by ID
+
+The delete contract is now consistently named `deleteById(int id)` across controller, service, and DAO. The service method starts the transaction, and the DAO resolves the ID with `EntityManager.find(Employee.class, id)` before passing the resulting managed entity to `remove()`. This keeps entity lookup and removal in the same persistence context rather than relying on a controller-loaded entity remaining managed.
+
+The controller's lesson-level not-found check remains, but current `findById()` uses `getSingleResult()`, which throws for no row instead of returning `null`. Missing-resource translation to `404` is therefore still future work.
+
+**Recall rule:** pass identity across application layers; obtain the managed entity where the persistence operation executes.
+
+### Current employee-project limitations
+
+- `findById()` uses `getSingleResult()`. An unknown ID currently becomes HTTP `500`; a later REST exception layer should translate absence to `404`.
+- PATCH currently accepts an untyped map without a dedicated validated request contract or explicit field allowlist beyond rejecting `id`.
+- DELETE performs the retained controller pre-check and then a second lookup inside the DAO transaction; not-found handling can later move into the service operation.
+- The controller has one unused DAO import, and several service methods can add `@Override` for compile-time checking and readability.
+
+These are recorded observations rather than silently corrected lesson code.
+
+### Current test boundary
+
+The empty `@SpringBootTest` `contextLoads()` method proves that the application context starts. It does not send an HTTP request or verify a route, status, response body, POJO conversion, or exception mapping. On 2026-09-20, the context test passed with installed Maven. Earlier checks on temporary port `18080` captured the pre-handler `500`; checks on `18081` verified the first local handlers; checks on `18082` verified that the global advice still returns `200` for index `0`, `404` for indexes `-1` and `3`, and `400` for conversion failure with `abcd`.
+
+The employee project's `contextLoads()` test also passed with installed Maven on 2026-09-20 and connected to the configured MySQL database. Focused smoke tests previously returned `200` with five rows from `GET /api/employees`, `200` from `GET /api/employees/1`, and the current `500` from `GET /api/employees/9999`. The test passed again after PATCH and after the ID-based DELETE correction. POST, PUT, and PATCH were not live-tested because they mutate the course database; DELETE was not live-tested because it is destructive.
+
+[Review the REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md) and the [manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md).
+
+### Replacing the manual DAO with `JpaRepository`
+
+The repository project replaces `EmployeeDao` and `EmployeeDaoImpl` with one domain-specific interface:
+
+```java
+public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
+}
+```
+
+The persistence work did not disappear. Spring Data JPA now supplies the standard repository implementation, which still uses JPA and Hibernate to reach MySQL. The controller continues to depend on `EmployeeService`, while the service now injects `EmployeeRepository`; this keeps the web layer independent of the persistence adapter.
+
+**Recall rule:** Spring Data removes repeated DAO implementation code; it does not remove JPA, Hibernate, transactions, SQL, or the database.
+
+### Inherited methods and the runtime repository proxy
+
+`JpaRepository<Employee, Integer>` specializes a generic repository contract: `Employee` is the domain type and `Integer` is its ID type. Methods such as `findAll()`, `findById()`, `save()`, `deleteById()`, `existsById()`, and `count()` are inherited, so the project interface does not redeclare them.
+
+Spring Boot auto-configures repository scanning under the main application package. Spring Data reads the repository metadata and creates a runtime proxy implementing `EmployeeRepository`; standard operations are routed to its JPA base implementation. On 2026-09-20, clean startup logged `Found 1 JPA repository interface`.
+
+**Recall rule:** method inheritance explains why the Java call compiles; repository scanning and proxy creation explain why an implementation object exists at runtime.
+
+### Why `findByEmail()` must be declared
+
+Every repository has an identifier, so `findById()` belongs to the generic CRUD contract. Not every entity has email, first name, or last name, so field-specific methods cannot be universal. Declaring `Optional<Employee> findByEmail(String email)` gives Java the signature and gives Spring Data a method name from which it can derive a query.
+
+The current project repository remains empty; `findByEmail`, `findByFirstNameAndLastName`, and `findByEmailContainingIgnoreCase` are revision examples, not current application behavior.
+
+### Derived query names are a grammar
+
+Spring Data does not interpret arbitrary English. It parses recognized query subjects and keywords around real Java entity properties:
+
+```text
+findByFirstNameAndLastName
+find             -> query subject
+By               -> predicate delimiter
+FirstName        -> Employee.firstName
+And              -> logical conjunction
+LastName         -> Employee.lastName
+```
+
+`findByEmailContainingIgnoreCase` combines the `email` property, a contains-style text predicate, and a case-insensitive modifier. Derived methods use Java property names such as `firstName`, not physical database names such as `first_name`.
+
+Useful groups include `And`/`Or`, equality through no suffix or `Is`/`Equals`, range comparisons such as `Between` and `GreaterThan`, text predicates such as `Containing`, `StartingWith`, and `EndingWith`, null checks, `In`/`NotIn`, `True`/`False`, `IgnoreCase`, and `OrderBy...Asc/Desc`.
+
+**Selection rule:** use derived names for short fixed predicates, `@Query` for a moderately complex fixed query, and Specifications/Criteria/Querydsl or a custom repository when filters are dynamic or the method name becomes a puzzle.
+
+### Return types and `save()` semantics
+
+Use `Optional<Employee>` when zero or one match is expected and a collection such as `List<Employee>` when many matches are valid. The return type does not create a database uniqueness constraint; an email that must be unique should be protected by the schema and tested as a business invariant.
+
+There is normally no separate repository `update()` method. `save()` persists new state and merges existing state according to Spring Data JPA's entity-state detection. In the current entity, the nullable generated `Integer id` provides the normal new-state signal when it is `null`.
+
+### Repository-project verification boundary
+
+On 2026-09-20, installed Maven `3.9.16` completed `mvn clean test`: one test passed with no failures, errors, or skips. Startup discovered one repository interface and initialized Spring Data JPA `4.1.1` with Hibernate `7.4.5.Final`. Read-only checks on temporary port `18083` returned HTTP `200` with five employees from `GET /api/employees` and HTTP `200` with ID `1` from `GET /api/employees/1`; the server was stopped and the port was confirmed free.
+
+The Maven Wrapper script still fails in the current Windows environment before Maven starts with `Cannot index into a null array`, so installed Maven remains the documented fallback. Write endpoints and custom derived-query examples were not executed. Startup also warned that local MySQL `5.7.19` is below this Hibernate version's supported minimum of MySQL `8.0.0`.
+
+[Review the complete Spring Data JPA proxy, inherited-method, derived-query, keyword, return-type, and verification notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md).
+
 ## Quick recall across sections
 
 1. Which two properties determine the port and application-wide URL prefix?
@@ -349,5 +593,95 @@ The earlier update/delete experiments are now commented out. The active `Command
 63. Which `ddl-auto` value verifies mappings without changing schema objects?
 64. Why does `ddl-auto` not replace creation of the MySQL database and user?
 65. Why are versioned migrations plus `validate` or `none` preferred for important production data?
+66. What is the complete URL of the current REST endpoint?
+67. Why does the final path contain both `/test` and `/hello`?
+68. What three features are combined by `@SpringBootApplication`?
+69. What are the roles of embedded Tomcat and the `DispatcherServlet`?
+70. Why does `@RestController` write `Hello World` to the response body instead of treating it as a view name?
+71. Why is the current `@RequestMapping("/hello")` not GET-only?
+72. What is the difference between routing and HTTP message conversion?
+73. What is the difference between serialization and deserialization?
+74. How do marshalling and unmarshalling relate to those directions?
+75. Why is Jackson available even though it is not declared directly in the project POM?
+76. Does the current `String` response prove POJO-to-JSON serialization?
+77. What does `@RequestBody` ask Spring to do?
+78. Why does the current `contextLoads()` test not prove the endpoint response?
+79. When does the current `@PostConstruct` method populate the student list?
+80. Why does `List<Student>` become a JSON array without manually constructing JSON text?
+81. What restriction does `@GetMapping` add compared with path-only `@RequestMapping`?
+82. What does `{studentId}` represent in `/api/students/{studentId}`?
+83. When can the name be omitted from `@PathVariable`?
+84. Why may the Java parameter be named `id` in `@PathVariable("studentId") int id`?
+85. What is the relationship between `name` and `value` in `@PathVariable`?
+86. Why do identical GET paths with `int` and `String` parameters conflict during startup?
+87. In what order do route matching, path-variable conversion, and method invocation occur?
+88. What does `{variable:regex}` change, and what does it not change?
+89. Why is the current `studentId` really a zero-based list index?
+90. Why does `abcd` produce `400` while index `3` now produces `404`?
+91. What responsibilities belong to the custom exception, error-response DTO, and exception-handler method?
+92. How can an empty `@ExceptionHandler` annotation infer the exception it handles?
+93. Must an exception type appear in both `@ExceptionHandler(...)` and the method parameter?
+94. How are multiple exception types listed in `@ExceptionHandler`?
+95. Why is `A | B ex` invalid as an exception-handler method parameter?
+96. What does `StudentErrorResponse` mean inside `ResponseEntity<StudentErrorResponse>`?
+97. Why does setting the JSON body's `status` field not set the real HTTP status?
+98. When should handlers be moved into `@RestControllerAdvice`?
+99. Why is a broad `Exception` handler that always returns `400` risky?
+100. What standardized Spring 7 alternatives exist for REST error bodies?
+101. When is a controller-advice bean registered, and when does one of its handler methods execute?
+102. Which is checked first: a local `@ExceptionHandler` or global advice?
+103. What two annotations are combined by `@RestControllerAdvice`?
+104. Why does the current `@ControllerAdvice` work without class-level `@ResponseBody`?
+105. Does `@RestControllerAdvice` automatically construct `StudentErrorResponse`?
+106. How do a DTO's `status` field, `ResponseEntity.status(...)`, and `@ResponseStatus` differ?
+107. What happens to an unset primitive `int status` field?
+108. When is `ResponseEntity` more suitable than `@ResponseStatus`?
+109. What does a directly returned DTO require under plain `@ControllerAdvice`?
+110. Which attributes can restrict controller-advice scope?
+111. Are multiple advice selectors combined with AND or OR?
+112. Why does the class name `StudentRestExceptionHandler` not restrict the advice to student requests?
+113. What responsibility belongs to the employee controller, service, DAO, and entity?
+114. What does `@Service` add beyond the general `@Component` stereotype?
+115. Does `@Service` automatically make its methods transactional?
+116. Why is the service layer commonly chosen as the transaction boundary?
+117. Why can the current find methods work without method-level `@Transactional`?
+118. What does `@RequestBody Employee employee` ask Spring MVC to do?
+119. Why may an employee POST body omit `id` even though the entity has four fields?
+120. What happens if a POST client supplies an ID in the current implementation?
+121. Why is this project's generated ID an identity/AUTO_INCREMENT value rather than a sequence?
+122. Why can POST and PUT both delegate to the same `save()` method?
+123. Does JPA know whether the incoming HTTP request used POST or PUT?
+124. Why does `merge()` return an entity, and why should callers use that returned instance?
+125. Why does the current PUT route not guarantee update-only behavior?
+126. Why does an unknown employee ID currently return `500` instead of `404`?
+127. Why does `EntityManager.remove()` require an entity instance rather than an integer ID?
+128. What does the employee `contextLoads()` test prove, and what does it leave untested?
+129. What intent does PATCH communicate that differs from PUT?
+130. Why does the PATCH endpoint use both a path variable and a request body?
+131. Why is `id` rejected from the current patch map?
+132. Why is `Map<String, Object>` useful for detecting which JSON properties were supplied?
+133. How does `{}` differ from `{"email": null}`?
+134. Can PATCH receive an `Employee` instead of a map, and what information would be lost without presence tracking?
+135. Is `JsonMapper` a Spring class or a Jackson class?
+136. Why can Spring inject the current `JsonMapper` without an application-defined `@Bean` method?
+137. What does `jsonMapper.updateValue()` do, and what does it not do?
+138. Why does DELETE pass an integer ID through the controller, service, and DAO contracts?
+139. Why does the DAO call `find()` inside the delete transaction before `remove()`?
+140. Why do the passing context tests still not prove that PATCH and DELETE work over HTTP?
+141. What project code was removed when `EmployeeDao` and `EmployeeDaoImpl` were replaced, and what persistence work still occurs?
+142. What do the two generic arguments in `JpaRepository<Employee, Integer>` represent?
+143. Why can the service call `findById()` without declaring it in `EmployeeRepository`?
+144. What runtime object satisfies the `EmployeeRepository` dependency?
+145. Why must `findByEmail()` be declared even though `findById()` is inherited?
+146. What two audiences use a derived-query method declaration?
+147. Why is `findByFirstNameAndLastName` a grammar rather than an English sentence?
+148. Which method segment identifies a Java property, and which segment adds the logical conjunction?
+149. What do `Containing` and `IgnoreCase` contribute to `findByEmailContainingIgnoreCase`?
+150. Why should a derived method use `FirstName` instead of the database column spelling `first_name`?
+151. When should a query return `Optional<Employee>` instead of `List<Employee>`?
+152. Does an `Optional<Employee>` return type enforce a unique database value?
+153. Why is there normally no separate `update()` method on `JpaRepository`?
+154. At what point should a long derived name become `@Query` or a dynamic-query abstraction?
+155. What did the current `contextLoads()` test and the two read-only HTTP checks prove, and what remains untested?
 
-Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), and [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md).
+Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), and the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md).
