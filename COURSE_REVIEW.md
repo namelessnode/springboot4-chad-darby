@@ -13,6 +13,7 @@ This file is the short revision layer across all course sections. Detailed code,
 | 04 — `02-spring-boot-rest-crud-employee` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md) |
 | 04 — `03-spring-boot-rest-crud-employee-with-jpa-repository` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md) |
 | 04 — `04-spring-boot-rest-crud-employee-with-spring-rest` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper launcher failed; installed Maven test passed | [Project notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md) |
+| 04 — `05-spring-boot-rest-crud-employee-swagger` | 4.1.1 | Target 25; verified on 26.0.1 | Installed Maven test passed; HTTP docs/UI checks passed | [Project notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md) |
 
 ## 01 — Spring Boot Basics
 
@@ -537,6 +538,12 @@ The active `default-page-size=2` is a fallback, so `?size=5` may override it. Pa
 
 **Recall rule:** Data REST is a quick repository-shaped CRUD API; a controller gives explicit control over business actions, URLs, and response bodies.
 
+### Springdoc: description and interactive UI for existing routes
+
+Spring Data REST registers this project's `/rest/members` API. The community-maintained Springdoc starter inspects registered HTTP mappings and produces an OpenAPI description; Swagger UI reads that description to display operations and send real HTTP requests. It can document Spring MVC controller routes as well when those routes exist. Springdoc does not itself create employee CRUD operations or expose arbitrary service methods. [Detailed Springdoc notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md)
+
+The active properties make `/swagger` the UI entry, `/docs` the OpenAPI JSON route, and `/docs.yaml` the YAML route. `spring.data.rest.base-path=/rest` affects the repository API, not these documentation URLs. The current `contextLoads()` test proves startup only; live read-only checks verified the documentation routes and found four generated path keys, including `/rest/members` and `/rest/members/{id}`. **Recall rule:** API route = what runs; OpenAPI document = what is described; Swagger UI = where you inspect and try it. [Detailed Springdoc notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md)
+
 ## Quick recall across sections
 
 1. Which two properties determine the port and application-wide URL prefix?
@@ -703,5 +710,10 @@ The active `default-page-size=2` is a fallback, so `?size=5` may override it. Pa
 161. With five employees, what does `page=1&size=3` return?
 162. Why can `size=5` override `default-page-size=2`?
 163. Which annotation reads `?familyName=...` in a controller, and which reads `{employeeId}`?
+164. Which project component creates `/rest/members`, and which library generates its OpenAPI description?
+165. What is the difference between `/rest/members`, `/docs`, and `/swagger`?
+166. With `springdoc.api-docs.path=/docs`, where is the YAML document?
+167. Will a new service method appear in Swagger UI without an HTTP mapping?
+168. Why should you be careful when using **Try it out** for `DELETE`?
 
-Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md), and the [Section 04 Spring Data REST notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md).
+Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md), the [Section 04 Spring Data REST notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md), and the [Section 04 Springdoc notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md).

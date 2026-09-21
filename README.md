@@ -31,6 +31,7 @@ chadDarby/
 | 04 — Spring REST CRUD | [`02-spring-boot-rest-crud-employee`](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/) | Layered REST/JPA CRUD, service transactions, generated IDs, PUT versus PATCH, Jackson partial updates, and transactional deletion | In progress |
 | 04 — Spring REST CRUD | [`03-spring-boot-rest-crud-employee-with-jpa-repository`](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/) | Spring Data JPA repository proxies, inherited CRUD methods, `JpaRepository` generics, derived query names, query keywords, and return types | In progress |
 | 04 — Spring REST CRUD | [`04-spring-boot-rest-crud-employee-with-spring-rest`](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/) | Spring Data REST generated CRUD, repository URL customization, HAL links, paging/sorting, query method search, and request parameter annotations | In progress |
+| 04 — Spring REST CRUD | [`05-spring-boot-rest-crud-employee-swagger`](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/) | Springdoc OpenAPI 3.1, generated JSON/YAML API descriptions, Swagger UI, custom documentation paths, and interactive API exploration | In progress |
 
 ## Section 01 — Spring Boot Basics
 
@@ -120,6 +121,16 @@ This project adds Spring Data REST to a JPA repository and removes the applicati
 - [Employee repository](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/src/main/java/com/example/cruddemo/repository/EmployeeRepository.java)
 - [Employee entity](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/src/main/java/com/example/cruddemo/entity/Employee.java)
 - [Application properties](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/src/main/resources/application.properties)
+
+### `05-spring-boot-rest-crud-employee-swagger`
+
+This project keeps the Spring Data REST employee resources and adds Springdoc's Web MVC UI starter. `/rest/members` is still the actual employee API; `/docs` and `/docs.yaml` describe its operations, while `/swagger` opens Swagger UI for browsing and sending real requests. The detailed notes explain the dependency's community ownership, the startup/request flow, custom URL properties, observed HTTP responses, and the current test boundary.
+
+- [Detailed Springdoc notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md)
+- [Maven configuration](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/pom.xml)
+- [Employee repository](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/src/main/java/com/example/cruddemo/repository/EmployeeRepository.java)
+- [Employee entity](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/src/main/java/com/example/cruddemo/entity/Employee.java)
+- [Application properties](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/src/main/resources/application.properties)
 
 ## How to study from this repository
 
