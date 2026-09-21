@@ -30,6 +30,7 @@ chadDarby/
 | 04 — Spring REST CRUD | [`01-spring-boot-rest-crud`](04-springboot-rest-crud/01-spring-boot-rest-crud/) | Spring MVC routing, Jackson 3 serialization, path variables, custom exceptions, global controller advice, `ResponseEntity`, `@ResponseStatus`, and HTTP status codes | In progress |
 | 04 — Spring REST CRUD | [`02-spring-boot-rest-crud-employee`](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/) | Layered REST/JPA CRUD, service transactions, generated IDs, PUT versus PATCH, Jackson partial updates, and transactional deletion | In progress |
 | 04 — Spring REST CRUD | [`03-spring-boot-rest-crud-employee-with-jpa-repository`](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/) | Spring Data JPA repository proxies, inherited CRUD methods, `JpaRepository` generics, derived query names, query keywords, and return types | In progress |
+| 04 — Spring REST CRUD | [`04-spring-boot-rest-crud-employee-with-spring-rest`](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/) | Spring Data REST generated CRUD, repository URL customization, HAL links, paging/sorting, query method search, and request parameter annotations | In progress |
 
 ## Section 01 — Spring Boot Basics
 
@@ -109,6 +110,16 @@ This project replaces the hand-written `EmployeeDao`/`EmployeeDaoImpl` with `Emp
 - [Employee entity](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/src/main/java/com/example/cruddemo/entity/Employee.java)
 - [Application properties](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/src/main/resources/application.properties)
 - [Employee database script](04-springboot-rest-crud/spring-boot-employee-sql-script/employee-directory.sql)
+
+### `04-spring-boot-rest-crud-employee-with-spring-rest`
+
+This project adds Spring Data REST to a JPA repository and removes the application controller/service layer for basic CRUD. Its active URL is `/rest/members`, with a default page size of two. The notes explain generated collection/item routes, HAL and HATEOAS, search-method boundaries, page/size/sort rules, and `@Param` versus MVC `@RequestParam` and `@PathVariable`. Read-only HTTP checks confirmed the renamed path, five stored employees, paging, sorting, HAL links, and the old path's `404`. The project remains in progress; custom query examples and write operations are not implemented or live-tested.
+
+- [Detailed Spring Data REST notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md)
+- [Maven configuration](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/pom.xml)
+- [Employee repository](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/src/main/java/com/example/cruddemo/repository/EmployeeRepository.java)
+- [Employee entity](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/src/main/java/com/example/cruddemo/entity/Employee.java)
+- [Application properties](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/src/main/resources/application.properties)
 
 ## How to study from this repository
 

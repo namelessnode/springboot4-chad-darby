@@ -12,6 +12,7 @@ This file is the short revision layer across all course sections. Detailed code,
 | 04 — `01-spring-boot-rest-crud` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md) |
 | 04 — `02-spring-boot-rest-crud-employee` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md) |
 | 04 — `03-spring-boot-rest-crud-employee-with-jpa-repository` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper 3.9.16; installed Maven fallback | [Project notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md) |
+| 04 — `04-spring-boot-rest-crud-employee-with-spring-rest` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper launcher failed; installed Maven test passed | [Project notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md) |
 
 ## 01 — Spring Boot Basics
 
@@ -526,6 +527,16 @@ The Maven Wrapper script still fails in the current Windows environment before M
 
 [Review the complete Spring Data JPA proxy, inherited-method, derived-query, keyword, return-type, and verification notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md).
 
+### Spring Data REST: the repository becomes an HTTP resource
+
+Spring Data JPA supplies the runtime `EmployeeRepository` implementation; Spring Data REST supplies the generic HTTP handlers around that repository. It needs a Spring Data repository but not JPA specifically. A manual `EntityManager` or `JdbcTemplate` DAO is not exported automatically. The current repository's `@RepositoryRestResource(path="members")` and `spring.data.rest.base-path=/rest` combine into `/rest/members`; the project has no application controller or service class. The path rename does not rename HAL relations: the current API root still links under `employees`, and collection data appears under `_embedded.employees`. [Detailed notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md)
+
+The standard collection supports GET/POST; an item supports GET/PUT/PATCH/DELETE. Exported custom **read** methods appear below `/search` and use GET. `@RestResource(path=...)` changes the query URL's final segment, `rel` changes a HAL link label, and `exported=false` hides the method. `@Modifying` changes JPA query execution, not the HTTP method. For custom commands or exact DTO responses, map a controller deliberately. A normal `@RestController` is outside Data REST's base path; `@RepositoryRestController` can participate under that path. [Detailed notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md)
+
+The active `default-page-size=2` is a fallback, so `?size=5` may override it. Page numbers begin at zero and `offset = page × size`; sorting happens before selecting the page. On 2026-09-21, `GET /rest/members` returned 2 of 5 employees with 3 total pages, while `page=1&size=3` returned the remaining 2. `Page<Employee>` plus `Pageable` gives custom search pagination and totals; `List<Employee>` without `Pageable` does not. `@Param("x")` names a repository query argument (and matches `:x` in explicit named queries), `@RequestParam("x")` binds a controller request parameter, and `@PathVariable("x")` binds `{x}` in a controller route. [Detailed notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md)
+
+**Recall rule:** Data REST is a quick repository-shaped CRUD API; a controller gives explicit control over business actions, URLs, and response bodies.
+
 ## Quick recall across sections
 
 1. Which two properties determine the port and application-wide URL prefix?
@@ -684,4 +695,13 @@ The Maven Wrapper script still fails in the current Windows environment before M
 154. At what point should a long derived name become `@Query` or a dynamic-query abstraction?
 155. What did the current `contextLoads()` test and the two read-only HTTP checks prove, and what remains untested?
 
-Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), and the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md).
+156. Why does `/rest/members` work without an application controller?
+157. Does `path="members"` also rename the `_embedded` relation?
+158. What are the collection and item HTTP routes supplied by Data REST?
+159. Why should a custom delete-by-name operation not be exported as a GET search resource?
+160. What does `@Modifying` change, and what does it not change?
+161. With five employees, what does `page=1&size=3` return?
+162. Why can `size=5` override `default-page-size=2`?
+163. Which annotation reads `?familyName=...` in a controller, and which reads `{employeeId}`?
+
+Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md), and the [Section 04 Spring Data REST notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md).
