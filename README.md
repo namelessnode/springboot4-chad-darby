@@ -32,6 +32,7 @@ chadDarby/
 | 04 — Spring REST CRUD | [`03-spring-boot-rest-crud-employee-with-jpa-repository`](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/) | Spring Data JPA repository proxies, inherited CRUD methods, `JpaRepository` generics, derived query names, query keywords, and return types | In progress |
 | 04 — Spring REST CRUD | [`04-spring-boot-rest-crud-employee-with-spring-rest`](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/) | Spring Data REST generated CRUD, repository URL customization, HAL links, paging/sorting, query method search, and request parameter annotations | In progress |
 | 04 — Spring REST CRUD | [`05-spring-boot-rest-crud-employee-swagger`](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/) | Springdoc OpenAPI 3.1, generated JSON/YAML API descriptions, Swagger UI, custom documentation paths, and interactive API exploration | In progress |
+| 05 — Spring Boot REST Security | [`00-spring-boot-rest-security-employee-starter-code`](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/) | Default credentials, in-memory users, HTTP Basic, role rules, security filter chain, CORS versus CSRF | In progress |
 
 ## Section 01 — Spring Boot Basics
 
@@ -131,6 +132,16 @@ This project keeps the Spring Data REST employee resources and adds Springdoc's 
 - [Employee repository](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/src/main/java/com/example/cruddemo/repository/EmployeeRepository.java)
 - [Employee entity](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/src/main/java/com/example/cruddemo/entity/Employee.java)
 - [Application properties](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/src/main/resources/application.properties)
+
+## Section 05 — Spring Boot REST Security
+
+### `00-spring-boot-rest-security-employee-starter-code`
+
+The employee CRUD API now has three in-memory users and method-specific role rules. The notes trace bean creation, Basic authentication, request matching, and the current CORS/CSRF configuration issue. GET is verified for John and Susan; write operations remain in progress.
+
+- [Detailed security notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md)
+- [Security configuration](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/src/main/java/com/luv2code/springboot/cruddemo/security/DemoSecurity.java)
+- [Maven configuration](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/pom.xml)
 
 ## How to study from this repository
 
