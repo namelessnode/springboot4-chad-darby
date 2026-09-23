@@ -153,3 +153,220 @@ Remember the setup in three parts: **users** (`InMemoryUserDetailsManager`), **r
 - [Spring Security 7.0: password storage](https://docs.spring.io/spring-security/reference/7.0/features/authentication/password-storage.html)
 - [Spring Security 7.0: CSRF](https://docs.spring.io/spring-security/reference/7.0/servlet/exploits/csrf.html)
 - [Spring Framework 7: `@Bean`](https://docs.spring.io/spring-framework/reference/core/beans/java/bean-annotation.html)
+
+---
+
+## JDBC-backed users — 2026-09-23
+
+### Lesson snapshot and active source
+
+The project still uses Spring Boot **4.0.0**, targets **Java 25**, and connects to the `employee_directory` MySQL database. Today's change replaces the active in-memory user store with a JDBC-backed user store. [`DemoJdbcSecurity.java`](src/main/java/com/luv2code/springboot/cruddemo/security/DemoJdbcSecurity.java#L10) is active; every line of [`DemoSecurity.java`](src/main/java/com/luv2code/springboot/cruddemo/security/DemoSecurity.java#L1) is currently commented out.
+
+That distinction has two effects:
+
+1. `JdbcUserDetailsManager` now looks for login accounts in database tables instead of rebuilding John, Mary, and Susan in memory.
+2. The earlier custom `SecurityFilterChain`, HTTP-method rules, explicit HTTP Basic call, and CSRF setting are also commented out. Spring Boot's default web security configuration applies until a new active `SecurityFilterChain` bean is supplied. Do not describe yesterday's role table as the active request configuration for this snapshot.
+
+No SQL schema file for the security tables is present in this project. The required tables and rows must therefore have been created outside this source tree unless a later lesson adds a migration or initialization script.
+
+### Mental model: the storage location changed
+
+Both managers provide user account information in the shape Spring Security understands. The main difference is where they store and retrieve it.
+
+| Manager | Storage | Survives restart? | Typical use |
+|---|---|---:|---|
+| `InMemoryUserDetailsManager` | Java map in application memory | No; users are reconstructed from code | Lessons, tests, small demos |
+| `JdbcUserDetailsManager` | Relational database reached through JDBC | Yes | Persistent database users using Spring Security's JDBC schema |
+
+```text
+Postman sends username/password
+  -> Spring Security authentication filter
+  -> AuthenticationManager / DaoAuthenticationProvider
+  -> UserDetailsManager.loadUserByUsername(username)
+  -> JdbcUserDetailsManager runs SQL through DataSource
+  -> users row supplies password and enabled flag
+  -> authorities rows supply permissions
+  -> password check
+  -> authorization check
+  -> controller, if allowed
+```
+
+The manager **loads** account information; a `DaoAuthenticationProvider` performs the password comparison. A successful login produces an `Authentication` containing the user's granted authorities.
+
+### `UserDetails`, `UserDetailsService`, and `UserDetailsManager`
+
+These names describe different levels of the same design:
+
+| Type | Responsibility |
+|---|---|
+| `UserDetails` | One account: username, stored password, enabled/account flags, and authorities |
+| `UserDetailsService` | Read operation: `loadUserByUsername(...)` |
+| `UserDetailsManager` | Extends `UserDetailsService` and adds operations such as `createUser`, `updateUser`, `deleteUser`, `changePassword`, and `userExists` |
+| `JdbcUserDetailsManager` | Concrete `UserDetailsManager` that implements those operations with JDBC |
+
+The bean method intentionally declares the interface as its return type:
+
+```java
+@Bean
+public UserDetailsManager userDetailsManager(DataSource dataSource) {
+    return new JdbcUserDetailsManager(dataSource);
+}
+```
+
+Spring calls this factory method while building the application context. The `DataSource` argument is dependency injection into a `@Bean` method: Spring finds the existing `DataSource` bean and passes it in. The returned `JdbcUserDetailsManager` is then registered under the default bean name `userDetailsManager`. Spring Security later finds it through the `UserDetailsService` parent interface. [Spring Security `UserDetailsManager` API](https://docs.spring.io/spring-security/reference/7.0/api/java/org/springframework/security/provisioning/UserDetailsManager.html)
+
+### What the `DataSource` object is
+
+`javax.sql.DataSource` is a standard interface for obtaining database connections. It is not the database, a table, an SQL query, or one permanent connection. In this project:
+
+1. `spring-boot-starter-data-jpa` brings JDBC and the preferred HikariCP connection pool.
+2. Spring Boot reads the active `spring.datasource.*` properties in [`application.properties`](src/main/resources/application.properties#L4).
+3. Boot creates a pooled `DataSource` bean for MySQL.
+4. Spring injects that same connection provider into `JdbcUserDetailsManager`; JPA also uses it for employee data.
+
+The database can therefore contain two separate concerns:
+
+- `employee` contains application business data.
+- `users` and `authorities` contain Spring Security login and permission data.
+
+Sharing a `DataSource` does not make an employee automatically a security user. These tables have different purposes. [Spring Boot SQL database configuration](https://docs.spring.io/spring-boot/4.0/reference/data/sql.html)
+
+### Why Spring Security uses `users` and `authorities`
+
+With its default JDBC queries, Spring Security expects this logical schema:
+
+```sql
+users(username, password, enabled)
+authorities(username, authority)
+```
+
+The standard table is named **`authorities`**, not `authorize`.
+
+| Table/column | Question it answers |
+|---|---|
+| `users.username` | Which account is being requested? |
+| `users.password` | What encoded password must be checked? |
+| `users.enabled` | Is this account allowed to authenticate? |
+| `authorities.username` | Which account receives this permission? |
+| `authorities.authority` | Which role or permission does the account have? |
+
+One user is stored once in `users` but can have several `authorities` rows:
+
+```text
+users
+  susan | encoded-password | enabled
+
+authorities
+  susan | ROLE_EMPLOYEE
+  susan | ROLE_MANAGER
+  susan | ROLE_ADMIN
+```
+
+This separation represents a one-to-many relationship: one login account can have many permissions. `JdbcUserDetailsManager` uses default queries equivalent to:
+
+```sql
+select username, password, enabled
+from users
+where username = ?;
+
+select username, authority
+from authorities
+where username = ?;
+```
+
+The default table and column names are conventions of Spring Security's ready-made JDBC implementation, not universal database rules. An application with an existing schema can configure custom user and authority queries. [Spring Security JDBC authentication](https://docs.spring.io/spring-security/reference/7.0/servlet/authentication/passwords/jdbc.html) · [default security schema](https://docs.spring.io/spring-security/reference/7.0/servlet/appendix/database-schema.html)
+
+### Roles, authorities, and `ROLE_`
+
+Spring stores and checks **authorities** as strings. A role is a convention built on top of an authority.
+
+| Authorization expression | Authority it checks by default |
+|---|---|
+| `hasRole("EMPLOYEE")` | `ROLE_EMPLOYEE` |
+| `hasAuthority("EMPLOYEE")` | `EMPLOYEE` exactly |
+| `hasAuthority("ROLE_EMPLOYEE")` | `ROLE_EMPLOYEE` exactly |
+
+Therefore, when the request rule uses `hasRole("EMPLOYEE")`, the simplest JDBC row is `ROLE_EMPLOYEE`. Do not call `hasRole("ROLE_EMPLOYEE")`; `hasRole` adds the prefix itself. The in-memory builder's `.roles("EMPLOYEE")` also creates the authority `ROLE_EMPLOYEE` automatically.
+
+`ROLE_` is not required for every possible permission. Values such as `EMPLOYEE_READ` or `invoice:approve` are valid authorities when the rule uses `hasAuthority(...)` with the exact same value. Spring Security also allows role-prefix customization, and `JdbcUserDetailsManager` can prepend a configured role prefix while reading database values. For this lesson, storing `ROLE_EMPLOYEE`, `ROLE_MANAGER`, and `ROLE_ADMIN` keeps the database aligned with the existing `hasRole(...)` rules. [Spring Security request authorization](https://docs.spring.io/spring-security/reference/7.0/servlet/authorization/authorize-http-requests.html)
+
+### What happens to the property user and in-memory users
+
+The active `UserDetailsManager` bean makes Spring Boot's development-user auto-configuration back off. The existing `spring.security.user.*` values do not insert a database row and do not add another login beside JDBC. That property-defined account works only if the relevant Boot auto-configuration is active.
+
+John, Mary, and Susan from yesterday also do not remain available merely because their source file still exists. Their entire configuration is commented out. A username works now only when the active authentication source can load it, which in this lesson means an appropriate row in `users` plus authority rows in `authorities`.
+
+### What if both user managers are enabled?
+
+If both configuration classes are active, Spring creates two beans implementing `UserDetailsService`:
+
+```text
+inMemoryUserDetailsManager
+userDetailsManager -> JdbcUserDetailsManager
+```
+
+Spring Security does not automatically merge the accounts or perform an in-memory-then-JDBC search. Its automatic global username/password setup requires a single `UserDetailsService`; with two, it logs that the global authentication manager will not use either service automatically.
+
+With the earlier `httpBasic(...)` filter chain enabled and no explicitly configured authentication provider, the expected consequence in this Spring Security generation is a failure while the security filter chain tries to obtain an authentication manager, potentially preventing startup. If another explicit `AuthenticationManager` or provider happens to exist, startup may succeed, but Postman will use only the stores wired into that manager. An unwired username/password request is normally rejected with HTTP 401.
+
+This two-manager scenario was **discussed but not run on 2026-09-23**. Treat the exact startup exception or HTTP status as documentation-derived expectation until a focused experiment verifies the combined configuration. `@Primary` could resolve an ordinary injection ambiguity, but it does not express the desired multi-store authentication order. Supporting both stores intentionally requires explicit authentication-provider or delegating-service configuration.
+
+### Current and historical behavior must not be mixed
+
+| Snapshot | Active user store | Active request rules |
+|---|---|---|
+| 2026-09-22 lesson | In-memory John/Mary/Susan | Custom method/path roles, Basic auth, lesson CSRF configuration |
+| 2026-09-23 source | JDBC `users`/`authorities` tables | Boot default web security because the whole earlier class is commented |
+
+The current source still contains the earlier lesson as comments, which is useful history but does not create beans. Java does not execute commented annotations, classes, or methods.
+
+### Verification boundary for today's notes
+
+These notes were derived from the active source, project configuration, and Spring Security 7.0/Spring Boot 4.0 documentation. No build, application startup, database query, or Postman request was run for the 2026-09-23 JDBC snapshot. Consequently:
+
+- The active bean graph and expected default JDBC schema are code/documentation-derived.
+- The existence and contents of local `users` and `authorities` tables were not verified.
+- The hypothetical two-manager startup/result was not observed.
+- Yesterday's HTTP observations remain valid only for yesterday's in-memory snapshot.
+
+### Common mistakes and fixes
+
+| Symptom or mistake | Cause/check |
+|---|---|
+| Valid in-memory username now receives 401 | In-memory configuration is commented; create the account in the JDBC tables or reactivate one deliberate user store. |
+| JDBC username exists but login fails | Check `enabled`, password encoding prefix/hash, and that authority rows exist. |
+| Login succeeds but `hasRole("MANAGER")` denies access | Confirm the loaded authority is `ROLE_MANAGER`, including case. |
+| A row contains `MANAGER` but the rule uses `hasRole("MANAGER")` | Store `ROLE_MANAGER`, configure a read-time prefix, or deliberately use `hasAuthority("MANAGER")`. |
+| `users` table does not exist | `new JdbcUserDetailsManager(dataSource)` does not automatically create an external MySQL schema. Create it through a SQL script/migration. |
+| Employee rows are mistaken for login accounts | `employee` is business data; the standard JDBC manager queries `users` and `authorities`. |
+| Both managers are enabled to get fallback behavior | Two beans are not automatically combined; configure the authentication providers explicitly. |
+| Yesterday's URL role rules appear not to work | Their `SecurityFilterChain` is commented out in the current source. |
+
+### Active recall
+
+1. What does `UserDetails` represent? **One security account and its authorities/account flags.**
+2. What extra capability does `UserDetailsManager` add to `UserDetailsService`? **Create, update, delete, password-change, and existence operations.**
+3. What does `DataSource` provide? **Database connections, usually from a pool.**
+4. Who creates the `DataSource` here? **Spring Boot, from the JDBC driver and `spring.datasource.*` configuration.**
+5. What does `JdbcUserDetailsManager` do with it? **Runs JDBC queries to load and manage security users and authorities.**
+6. Why are there two tables? **One stores account credentials/status; the other allows each account to have multiple authorities.**
+7. Does the JDBC manager use the `employee` table by default? **No. It expects `users` and `authorities`.**
+8. Does `new JdbcUserDetailsManager(dataSource)` create those MySQL tables? **No.**
+9. What does `hasRole("ADMIN")` look for? **`ROLE_ADMIN`.**
+10. Must every authority start with `ROLE_`? **No; the prefix is required by the default role shortcut, while `hasAuthority` performs an exact authority check.**
+11. Does the property-defined user get copied into `users`? **No.**
+12. If both managers are beans, does Spring automatically search both? **No.**
+13. Are yesterday's custom request matchers active now? **No; the entire earlier configuration class is commented.**
+
+### Official references for this lesson
+
+- [Spring Security 7.0: JDBC authentication](https://docs.spring.io/spring-security/reference/7.0/servlet/authentication/passwords/jdbc.html)
+- [Spring Security 7.0: default database schema](https://docs.spring.io/spring-security/reference/7.0/servlet/appendix/database-schema.html)
+- [Spring Security 7.0: `UserDetailsService`](https://docs.spring.io/spring-security/reference/7.0/servlet/authentication/passwords/user-details-service.html)
+- [Spring Security 7.0: `UserDetailsManager` API](https://docs.spring.io/spring-security/reference/7.0/api/java/org/springframework/security/provisioning/UserDetailsManager.html)
+- [Spring Security 7.0: `DaoAuthenticationProvider`](https://docs.spring.io/spring-security/reference/7.0/servlet/authentication/passwords/dao-authentication-provider.html)
+- [Spring Security 7.0: request authorization](https://docs.spring.io/spring-security/reference/7.0/servlet/authorization/authorize-http-requests.html)
+- [Spring Boot 4.0: SQL databases and `DataSource`](https://docs.spring.io/spring-boot/4.0/reference/data/sql.html)
+- [Spring Boot 4.0: security auto-configuration](https://docs.spring.io/spring-boot/4.0/reference/web/spring-security.html)
+
+Course navigation: [course map](../../README.md) · [cumulative review](../../COURSE_REVIEW.md).
