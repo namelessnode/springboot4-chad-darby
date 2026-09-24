@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+<h1>Verson 1 form with param handling on next page</h1>
+<form th:action="@{/processForm}" method="POST" >
+    <input type = "text" placeholder="Enter your name" name = "studentName"></input>
+    <input type = "submit"></input>
+</form>
+
+<h2>Version 2 form with model attribute handling on next page</h2>
+<form th:action="@{/processFormVersion2}" method="POST" >
+    <input type = "text" placeholder="Enter your name" name = "studentName"></input>
+    <input type = "submit"></input>
+</form>
+
+<h2>Version 3 form with request param mapping</h2>
+<form th:action="@{/processFormVersion3}" method="POST" >
+    <input type = "text" placeholder="Enter your name" name = "studentName"></input>
+    <input type = "submit"></input>
+</form>
+</body>
+
+</html>

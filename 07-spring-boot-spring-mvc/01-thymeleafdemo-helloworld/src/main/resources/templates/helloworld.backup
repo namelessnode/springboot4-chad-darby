@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+
+<html xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <link rel="stylesheet" type = "text/css" th:href="@{css/style.css}">
+</head>
+
+
+<body>
+
+<p th:text="'Todays date is ' + ${date}" class="formal"></p><br>
+
+</body>
+
+</html>

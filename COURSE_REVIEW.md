@@ -15,6 +15,7 @@ This file is the short revision layer across all course sections. Detailed code,
 | 04 — `04-spring-boot-rest-crud-employee-with-spring-rest` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper launcher failed; installed Maven test passed | [Project notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md) |
 | 04 — `05-spring-boot-rest-crud-employee-swagger` | 4.1.1 | Target 25; verified on 26.0.1 | Installed Maven test passed; HTTP docs/UI checks passed | [Project notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md) |
 | 05 — `00-spring-boot-rest-security-employee-starter-code` | 4.0.0 | Target 25; verified on 26.0.1 | Wrapper failed; installed Maven test passed | [Project notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md) |
+| 07 — `01-thymeleafdemo-helloworld` | 4.1.1 | Target 25; verified on 26.0.1 | Maven Wrapper 3.9.16; test and HTTP checks passed | [Project notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md) |
 
 ## 01 — Spring Boot Basics
 
@@ -557,6 +558,44 @@ The active JDBC manager now overrides its two read queries for `members(user_id,
 
 The lesson's two-table model is valid: `members` stores identity/password/status, and each `roles` row assigns one authority to a user. Enterprises may instead use a three-table many-to-many model (`users`, role catalog, user-role join table), put one role in the user row when exactly one role is guaranteed, or delegate identity to LDAP/Active Directory or an OAuth2/OpenID Connect provider. A common hybrid lets the external provider prove identity while a local database stores application-specific authorization. **Recall rule:** Spring Security needs an authenticated principal and authorities; they do not have to originate in the same database. [Detailed security notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md#users-and-authorities-can-come-from-external-systems)
 
+## 07 — Spring Boot Spring MVC
+
+### Front controller, controller, model, and view
+
+Embedded Tomcat receives the HTTP request, and Spring MVC's `DispatcherServlet` coordinates handler selection, controller invocation, and view resolution. With `@Controller`, a returned string such as `"helloworld"` is a logical view name; with `@RestController`, a returned string normally becomes response-body content. Thymeleaf combines the selected template with the current request/model data and writes final HTML.
+
+**Recall rule:** Tomcat receives; DispatcherServlet coordinates; the controller handles; the model carries view data; Thymeleaf renders.
+
+### Template and static-resource locations
+
+Boot's default Thymeleaf setup finds views in `src/main/resources/templates`. Static assets under `src/main/resources/static` are served by URL, so `static/css/style.css` is available as `/css/style.css`. A context-relative Thymeleaf link is `th:href="@{/css/style.css}"`.
+
+The current `DemoController` adds a `date`, but the active `helloworld.html` does not read it; that expression remains only in `helloworld.backup`. The CSS file is also not linked by the active templates. **Recall rule:** adding data or an asset file is only half the path—the selected view must reference it.
+
+### Request parameters, attributes, and the model
+
+Request parameters are client-supplied query/form strings. Read them with `request.getParameter(...)`, `@RequestParam`, or Thymeleaf's `${param...}` namespace. Request attributes are server-side objects attached during one request and read with `getAttribute(...)`; model entries are Spring MVC's view-facing abstraction and are available as root variables such as `${message}`.
+
+`getParameter` returns `null` when a key is absent. A required `@RequestParam` instead causes a `400` before the handler runs. In the current V2 handler, dereferencing the missing value with `.toUpperCase()` causes `500`. A present blank value (`studentName=`) is the empty string and is not the same as a missing key.
+
+**Recall rule:** parameter = client sent it; attribute/model value = server attached it.
+
+### Form submission and `name`
+
+Only the successful controls inside the submitted `<form>` become request data. `name="studentName"` creates the request key; `id` is for labels, CSS, and JavaScript and does not replace `name`. The page's three forms may reuse `studentName` safely because submitting one does not include controls from the other two forms. Repeated names inside the same submitted form can produce multiple values.
+
+### GET, POST, and request lifetime
+
+GET forms are valid for safe retrieval such as search and filter URLs; POST forms are appropriate for processing that should not be represented as a reusable query URL. POST is not encryption—HTTPS protects transport. The current project correctly uses GET to display the form and POST for all three processing mappings; V3's explicit `@RequestMapping(..., method = POST)` has the same routing restriction as `@PostMapping`.
+
+The current POST handler and Thymeleaf render share one request, so `${param.studentName}` can read the submitted value. A later link click starts another request; ordinary request parameters and model data do not automatically survive. Use explicit URL values, session state, flash attributes, or persistence when the use case requires a longer lifetime.
+
+### Future: Post/Redirect/Get
+
+The current handlers render directly from POST. Post/Redirect/Get instead processes the POST, sends a redirect, and lets the browser perform a GET for the result page. It avoids normal refresh-driven form resubmission; flash attributes can carry one-time data across the redirect. PRG is recorded for the next lesson and is not yet implemented.
+
+[Review the complete controller, Thymeleaf, form, request-scope, edge-case, and observed HTTP notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md).
+
 ## Quick recall across sections
 
 1. Which two properties determine the port and application-wide URL prefix?
@@ -745,5 +784,25 @@ The lesson's two-table model is valid: `members` stores identity/password/status
 183. In the current custom schema, what relationship does each row of `roles` represent?
 184. When is a separate user-role join table more appropriate than a role column in the user table?
 185. How can an external identity provider and a local authorization database cooperate?
+186. What makes `DispatcherServlet` a front controller?
+187. What does a returned `String` mean under `@Controller`, and how does that differ under `@RestController`?
+188. How does `"helloworld"` become `templates/helloworld.html`?
+189. What is the role of `Model`, and how long does an ordinary model value last?
+190. How do `${message}` and `${param.studentName}` differ?
+191. Why can Thymeleaf read the current request parameter even when the controller does not accept `HttpServletRequest`?
+192. What is the difference between `getParameter()` and `getAttribute()`?
+193. Why does an input need `name`, and what job does `id` have instead?
+194. Why do the three same-named inputs on the current page not all appear in one submission?
+195. What happens when the same parameter name occurs several times in one submitted form?
+196. Why can the annotation key and Java variable differ in `@RequestParam("studentName") String name`?
+197. What is the difference between a missing key and `studentName=`?
+198. Why does missing `studentName` produce `500` in V2 but `400` in V3?
+199. When is GET a good form method, and when is POST more appropriate?
+200. Does POST encrypt form values?
+201. Why does GET fail with `405` on the three current processing routes?
+202. Why can page B read page A's submitted value during direct rendering, while a later page C cannot automatically read it?
+203. Which mechanisms can intentionally carry data across requests?
+204. Why is the current `date` model attribute not visible at `/helloworld`?
+205. What problem does Post/Redirect/Get solve, and is it implemented here?
 
-Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md), the [Section 04 Spring Data REST notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md), the [Section 04 Springdoc notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md), and the [Section 05 security notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md).
+Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md), the [Section 04 Spring Data REST notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md), the [Section 04 Springdoc notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md), the [Section 05 security notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md), and the [Section 07 Spring MVC and Thymeleaf notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md).

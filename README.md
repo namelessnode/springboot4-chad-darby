@@ -33,6 +33,7 @@ chadDarby/
 | 04 — Spring REST CRUD | [`04-spring-boot-rest-crud-employee-with-spring-rest`](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/) | Spring Data REST generated CRUD, repository URL customization, HAL links, paging/sorting, query method search, and request parameter annotations | In progress |
 | 04 — Spring REST CRUD | [`05-spring-boot-rest-crud-employee-swagger`](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/) | Springdoc OpenAPI 3.1, generated JSON/YAML API descriptions, Swagger UI, custom documentation paths, and interactive API exploration | In progress |
 | 05 — Spring Boot REST Security | [`00-spring-boot-rest-security-employee-starter-code`](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/) | Default and in-memory users, JDBC authentication, custom security schemas and queries, enterprise identity sources, HTTP Basic, role rules, and CSRF | In progress |
+| 07 — Spring Boot Spring MVC | [`01-thymeleafdemo-helloworld`](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/) | Front-controller flow, `@Controller`, Thymeleaf templates, model/request data, form parameters, and GET/POST mappings | In progress |
 
 ## Section 01 — Spring Boot Basics
 
@@ -144,6 +145,18 @@ This project preserves the progression from Boot's development user to in-memory
 - [Custom JDBC security schema](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/sql-scripts/06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql)
 - [Commented in-memory and request-rule lesson](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/src/main/java/com/luv2code/springboot/cruddemo/security/DemoSecurity.java)
 - [Maven configuration](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/pom.xml)
+
+## Section 07 — Spring Boot Spring MVC
+
+### `01-thymeleafdemo-helloworld`
+
+This first server-rendered MVC project contrasts `@Controller` with the earlier REST controllers. `GET /showForm` renders three independent forms, and their POST handlers demonstrate direct Thymeleaf request-parameter access, manual `HttpServletRequest` processing, targeted `@RequestParam` binding, and model attributes. The notes trace the complete `DispatcherServlet` → controller → model → Thymeleaf flow, explain the required `templates`/`static` resource layout, distinguish request parameters from attributes, cover missing versus blank inputs, and record the future Post/Redirect/Get lesson.
+
+- [Detailed Spring MVC and Thymeleaf notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md)
+- [Maven configuration](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/pom.xml)
+- [Form controller](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/java/com/example/thymeleafdemo/controller/HelloWorldController.java)
+- [Form template](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/resources/templates/helloworld-form.html)
+- [Result template](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/resources/templates/helloworld.html)
 
 ## How to study from this repository
 

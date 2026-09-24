@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+
+<html xmlns:th="http://www.thymeleaf.org">
+
+<body>
+<h1> Value from form parameter</h1>
+<p th:text="'Student name from param is ' + ${param.studentName}"></p><br>
+
+<h1>Value from model</h1>
+<p th:text="'Student name from model is ' + ${message}"></p>
+
+<h1>Value from model</h1>
+<p th:text="'Student name from model is ' + ${messageV3}"></p>
+</body>
+
+</html>
