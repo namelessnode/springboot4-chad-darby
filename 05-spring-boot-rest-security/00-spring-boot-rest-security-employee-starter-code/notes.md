@@ -370,3 +370,206 @@ These notes were derived from the active source, project configuration, and Spri
 - [Spring Boot 4.0: security auto-configuration](https://docs.spring.io/spring-boot/4.0/reference/web/spring-security.html)
 
 Course navigation: [course map](../../README.md) · [cumulative review](../../COURSE_REVIEW.md).
+
+---
+
+## Custom JDBC schema and enterprise identity sources — 2026-09-24
+
+### Lesson snapshot and active implementation
+
+The project still uses Spring Boot **4.0.0** and targets **Java 25** ([`pom.xml`](pom.xml#L8), [`pom.xml`](pom.xml#L30)). The active security configuration now keeps `JdbcUserDetailsManager` but replaces its default read queries with queries for the lesson's custom `members` and `roles` tables ([`DemoJdbcSecurity.java`](src/main/java/com/luv2code/springboot/cruddemo/security/DemoJdbcSecurity.java#L13)). The accompanying custom-schema script creates those tables and inserts BCrypt-backed John, Mary, and Susan accounts whose lesson password is `fun123` ([`06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql`](sql-scripts/06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql#L10)).
+
+The important idea is that Spring Security does not require the physical names `users` and `authorities`. Those names belong to its default JDBC queries. With custom queries, the table and column names may follow an existing application schema as long as each query returns the values Spring expects in the expected positions.
+
+The earlier `DemoSecurity` class remains fully commented, including its `SecurityFilterChain` and method/path role rules ([`DemoSecurity.java`](src/main/java/com/luv2code/springboot/cruddemo/security/DemoSecurity.java#L13)). Therefore this snapshot loads authorities from MySQL, but the earlier custom GET/POST/DELETE role matrix is not active. Spring Boot's default web security still requires authentication for the application. The `spring.security.user.*` properties remain in the file but do not create Scott while the custom `UserDetailsService` bean is present ([`application.properties`](src/main/resources/application.properties#L8)).
+
+### The query result is the contract
+
+The active bean configures these two read queries:
+
+```java
+jdbcUserDetailsManager.setUsersByUsernameQuery(
+        "select user_id, pw, active from members where user_id = ?");
+
+jdbcUserDetailsManager.setAuthoritiesByUsernameQuery(
+        "select user_id, role from roles where user_id = ?");
+```
+
+The `?` is a JDBC parameter placeholder. During login, Spring supplies the submitted username as that parameter; it is not replaced manually in Java code.
+
+| Query | Required result position | Current column | Meaning |
+|---|---:|---|---|
+| User query | 1 | `user_id` | Username |
+| User query | 2 | `pw` | Stored encoded password |
+| User query | 3 | `active` | Whether authentication is allowed |
+| Authority query | 1 | `user_id` | Username that owns the authority |
+| Authority query | 2 | `role` | One granted authority string |
+
+The user query should identify one account. The authority query may return several rows, allowing one account to receive several authorities. For Susan, the script returns `ROLE_EMPLOYEE`, `ROLE_MANAGER`, and `ROLE_ADMIN` ([custom schema script](sql-scripts/06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql#L49)). `JdbcUserDetailsManager` combines those rows into one `UserDetails` object.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant S as Spring Security
+    participant J as JdbcUserDetailsManager
+    participant D as MySQL
+    C->>S: Send username and password
+    S->>J: loadUserByUsername(username)
+    J->>D: Query members
+    D-->>J: user_id, pw, active
+    J->>D: Query roles
+    D-->>J: zero or more authority rows
+    J-->>S: UserDetails with authorities
+    S-->>C: Continue or reject authentication
+```
+<!-- Sources: src/main/java/com/luv2code/springboot/cruddemo/security/DemoJdbcSecurity.java:13, sql-scripts/06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql:10 -->
+
+### What the `active` field means
+
+For this built-in JDBC implementation, the user query must return a third boolean-like value representing `enabled`. The physical database column does **not** have to be named `enabled`: the current `active` column works because it is the third selected value. In the lesson schema, `1` means enabled and `0` means disabled ([custom schema script](sql-scripts/06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql#L13)). A disabled account can be found, but Spring Security rejects its authentication.
+
+The database does not need a physical status column if every account is always enabled. The query can return a constant:
+
+```sql
+select user_id, pw, true as enabled
+from members
+where user_id = ?
+```
+
+Therefore the precise rule is: **`JdbcUserDetailsManager` needs an enabled value in the third result position; it does not require a physical column named `enabled`.** A custom `UserDetailsService` could instead derive `isEnabled()` from another status value or always return `true`.
+
+### What the two custom tables represent
+
+The current schema is a valid small design:
+
+```mermaid
+erDiagram
+    MEMBERS ||--o{ ROLES : receives
+    MEMBERS {
+        varchar user_id PK
+        char pw
+        tinyint active
+    }
+    ROLES {
+        varchar user_id FK
+        varchar role
+    }
+```
+<!-- Sources: sql-scripts/06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql:10, sql-scripts/06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql:38 -->
+
+Although the second table is named `roles`, each row is really a **user-to-authority assignment**. Role names are repeated directly in rows such as `('mary', 'ROLE_MANAGER')`. That is appropriate for a lesson and many small applications.
+
+Larger systems commonly normalize the model into three tables:
+
+```text
+users(user_id, password_hash, enabled)
+role_catalog(role_id, role_name)
+user_roles(user_id, role_id)
+```
+
+`role_catalog` defines each role once, while `user_roles` implements the many-to-many relationship: a user can have many roles, and a role can belong to many users. Some systems go further with `permissions` and `role_permissions` so that roles group finer permissions such as `invoice:read` and `invoice:approve`.
+
+| Design | When it fits | Main tradeoff |
+|---|---|---|
+| Role column in the user row | Every user has exactly one role | Simple, but cannot naturally represent several roles |
+| Current `members` + `roles` design | Users can have several authority strings | Role text is repeated; there is no separate role catalog |
+| `users` + `roles` + `user_roles` | Reusable, centrally managed roles | More tables and joins |
+| External identity provider | Organization already manages identities centrally | The application must map external claims/groups/scopes to its authorities |
+
+Avoid storing a comma-separated value such as `"EMPLOYEE,MANAGER"` in one column. It is harder to index, constrain, join, and query than one assignment per row.
+
+### Users and authorities can come from external systems
+
+Spring Security ultimately needs an authenticated principal and a collection of `GrantedAuthority` values. JDBC is only one way to obtain them.
+
+```mermaid
+flowchart TD
+    R[Incoming request] --> M{Authentication mechanism}
+    M -->|Username and password| U[UserDetailsService or authentication provider]
+    M -->|Bearer token| T[JWT validation or token introspection]
+    U --> J[JDBC database]
+    U --> L[LDAP or Active Directory]
+    U --> A[Custom service or API]
+    T --> I[OAuth2 or OpenID Connect provider]
+    J --> G[Authentication with GrantedAuthority values]
+    L --> G
+    A --> G
+    I --> G
+    G --> Z[Authorization rules]
+    style R fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style M fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style U fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style T fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style J fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style L fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style A fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style I fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style G fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    style Z fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+```
+<!-- Sources: src/main/java/com/luv2code/springboot/cruddemo/security/DemoJdbcSecurity.java:13, src/main/java/com/luv2code/springboot/cruddemo/security/DemoSecurity.java:27 -->
+
+Common enterprise arrangements include:
+
+| Source | Typical behavior |
+|---|---|
+| Application JDBC database | The application owns password hashes, account status, and authorities |
+| LDAP or Active Directory | A corporate directory authenticates employees and may supply groups |
+| OAuth2/OpenID Connect provider | A central provider handles sign-in; the application receives identity and claims |
+| JWT resource server | The API validates a signed bearer token and converts scopes/claims into authorities |
+| Custom `UserDetailsService` | Application code loads account information from a custom database, API, or other store |
+| Hybrid | An external provider proves identity while the application database stores application-specific roles |
+
+The hybrid model is common: a central identity provider confirms who the person is, while the application decides whether that person may approve an invoice or administer this particular system. In a JWT resource server, the application normally validates the token rather than loading a local password row for every request.
+
+### Reading users versus managing users
+
+The two configured setters replace the SQL used to **read** a user and authorities. `JdbcUserDetailsManager` also has write operations inherited from `UserDetailsManager`, including create, update, and delete. Those operations have their own SQL statements. If this application later calls `createUser()` or `deleteUser()`, their SQL must also be customized for `members` and `roles`; changing only the two read queries does not redirect every management operation.
+
+The present lesson uses the manager for authentication against rows inserted by the SQL script, so the two read-query overrides cover the demonstrated path.
+
+### Verification — 2026-09-24
+
+The source and schema were inspected directly. The Maven Wrapper failed before Maven started with the known Windows launcher error `Cannot index into a null array`. The installed-Maven fallback `mvn "-Dmaven.repo.local=C:\Users\Kaushik\.m2\repository" test` completed with **BUILD SUCCESS**: one test ran with no failures or errors, Hikari connected to `employee_directory`, and Spring logged that the global `AuthenticationManager` was configured with the `userDetailsManager` bean.
+
+The current `contextLoads()` test contains no endpoint assertions ([`CruddemoApplicationTests.java`](src/test/java/com/luv2code/springboot/cruddemo/CruddemoApplicationTests.java#L6)). This run establishes application-context startup and database connectivity, but it does not execute `loadUserByUsername`, prove the custom SQL result mapping, verify the lesson passwords, exercise a disabled account, or test endpoint authorization. No schema script was run while preparing these notes because the custom script intentionally drops and recreates security tables.
+
+### Common mistakes
+
+| Mistake or symptom | Cause and correction |
+|---|---|
+| Renaming tables without setting custom queries | The default manager still queries `users` and `authorities`; configure both read queries. |
+| Returning columns in the wrong order | `JdbcDaoImpl` maps by expected positions; return username, password, enabled for the user query and username, authority for the authority query. |
+| Omitting `active` because every account is enabled | Return a constant `true` as the third value. |
+| Setting `active = 0` and expecting login to work | The account is disabled, so authentication is rejected. |
+| Putting one comma-separated role list in a column | Return one authority per row or implement deliberate parsing in a custom service. |
+| Assuming loaded roles enforce yesterday's endpoint matrix | The earlier `SecurityFilterChain` is commented; loading authorities and applying authorization rules are separate steps. |
+| Calling `createUser()` after changing only read queries | Management operations still need custom write SQL for the custom schema. |
+| Assuming external login removes authorization | External identity still has to be mapped to authorities used by application rules. |
+
+### Active recall
+
+1. Does Spring Security require tables literally named `users` and `authorities`? **No. Those names belong to its default JDBC queries.**
+2. What matters when custom JDBC queries are used? **The queries must return the expected values in the expected positions.**
+3. What are the three user-query results? **Username, encoded password, and enabled status.**
+4. What are the two authority-query results? **Username and one authority string.**
+5. Why can the authority query return several rows? **One account can have several authorities.**
+6. Is a physical column named `enabled` mandatory? **No. The third result must provide the enabled value; it may come from `active` or a constant.**
+7. What does `active = 0` mean? **The account is disabled and cannot authenticate.**
+8. When can a role live directly in the user table? **When the domain guarantees one role per user and that limitation is acceptable.**
+9. What is the normalized many-to-many design? **Users, a role catalog, and a user-role join table.**
+10. Can users come from outside the application database? **Yes—from LDAP/Active Directory, an OAuth2/OpenID Connect provider, tokens, or a custom service.**
+11. In a hybrid design, what can be split? **An external provider proves identity while the application database supplies application-specific authorization.**
+12. Do the two custom read queries also customize `createUser()`? **No. Management operations have separate SQL.**
+13. Are the earlier method/path role rules active? **No. Their configuration class is currently commented out.**
+
+### Official references for this lesson
+
+- [Spring Security 7.0: JDBC authentication](https://docs.spring.io/spring-security/reference/7.0/servlet/authentication/passwords/jdbc.html)
+- [Spring Security 7.0 API: `JdbcDaoImpl` custom-query contract](https://docs.spring.io/spring-security/site/docs/current/api/org/springframework/security/core/userdetails/jdbc/JdbcDaoImpl.html)
+- [Spring Security 7.0: authentication architecture and `GrantedAuthority`](https://docs.spring.io/spring-security/reference/7.0/servlet/authentication/architecture.html)
+- [Spring Security 7.0: OAuth2 resource server](https://docs.spring.io/spring-security/reference/7.0/servlet/oauth2/resource-server/index.html)
+- [Spring Security 7.0: request authorization](https://docs.spring.io/spring-security/reference/7.0/servlet/authorization/authorize-http-requests.html)
+
+Course navigation: [course map](../../README.md) · [cumulative review](../../COURSE_REVIEW.md).

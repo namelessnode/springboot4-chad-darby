@@ -32,7 +32,7 @@ chadDarby/
 | 04 — Spring REST CRUD | [`03-spring-boot-rest-crud-employee-with-jpa-repository`](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/) | Spring Data JPA repository proxies, inherited CRUD methods, `JpaRepository` generics, derived query names, query keywords, and return types | In progress |
 | 04 — Spring REST CRUD | [`04-spring-boot-rest-crud-employee-with-spring-rest`](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/) | Spring Data REST generated CRUD, repository URL customization, HAL links, paging/sorting, query method search, and request parameter annotations | In progress |
 | 04 — Spring REST CRUD | [`05-spring-boot-rest-crud-employee-swagger`](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/) | Springdoc OpenAPI 3.1, generated JSON/YAML API descriptions, Swagger UI, custom documentation paths, and interactive API exploration | In progress |
-| 05 — Spring Boot REST Security | [`00-spring-boot-rest-security-employee-starter-code`](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/) | Default and in-memory users, JDBC authentication, `DataSource`, security user/authority tables, HTTP Basic, role rules, and CSRF | In progress |
+| 05 — Spring Boot REST Security | [`00-spring-boot-rest-security-employee-starter-code`](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/) | Default and in-memory users, JDBC authentication, custom security schemas and queries, enterprise identity sources, HTTP Basic, role rules, and CSRF | In progress |
 
 ## Section 01 — Spring Boot Basics
 
@@ -137,10 +137,11 @@ This project keeps the Spring Data REST employee resources and adds Springdoc's 
 
 ### `00-spring-boot-rest-security-employee-starter-code`
 
-This project preserves the progression from Boot's development user to in-memory users and now to JDBC-backed authentication. The active `DemoJdbcSecurity` publishes a `JdbcUserDetailsManager` connected through Boot's `DataSource`; the earlier in-memory manager and custom request rules remain in the source as commented lesson history. The notes explain the `users` and `authorities` tables, role-prefix rules, and why multiple user-manager beans are not automatically combined.
+This project preserves the progression from Boot's development user to in-memory users and now to JDBC-backed authentication. The active `DemoJdbcSecurity` publishes a `JdbcUserDetailsManager` connected through Boot's `DataSource` and maps Spring Security's expected result shape onto custom `members` and `roles` tables. The earlier in-memory manager and custom request rules remain in the source as commented lesson history. The notes cover default and custom schemas, enabled-account handling, role-prefix rules, normalized enterprise role models, external identity sources, and why multiple user-manager beans are not automatically combined.
 
 - [Detailed security notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md)
 - [Active JDBC security configuration](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/src/main/java/com/luv2code/springboot/cruddemo/security/DemoJdbcSecurity.java)
+- [Custom JDBC security schema](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/sql-scripts/06-setup-spring-security-demo-database-bcrypt-custom-table-names.sql)
 - [Commented in-memory and request-rule lesson](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/src/main/java/com/luv2code/springboot/cruddemo/security/DemoSecurity.java)
 - [Maven configuration](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/pom.xml)
 
