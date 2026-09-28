@@ -15,7 +15,7 @@ This file is the short revision layer across all course sections. Detailed code,
 | 04 — `04-spring-boot-rest-crud-employee-with-spring-rest` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper launcher failed; installed Maven test passed | [Project notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md) |
 | 04 — `05-spring-boot-rest-crud-employee-swagger` | 4.1.1 | Target 25; verified on 26.0.1 | Installed Maven test passed; HTTP docs/UI checks passed | [Project notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md) |
 | 05 — `00-spring-boot-rest-security-employee-starter-code` | 4.0.0 | Target 25; verified on 26.0.1 | Wrapper failed; installed Maven test passed | [Project notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md) |
-| 07 — `01-thymeleafdemo-helloworld` | 4.1.1 | Target 25; verified on 26.0.1 | Maven Wrapper 3.9.16; test and HTTP checks passed | [Project notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md) |
+| 07 — `01-thymeleafdemo-helloworld` | 4.1.1 | Target 25; verified on 26.0.1 | Wrapper launcher failed; installed Maven test and HTTP checks passed | [Project notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md) |
 
 ## 01 — Spring Boot Basics
 
@@ -590,6 +590,30 @@ GET forms are valid for safe retrieval such as search and filter URLs; POST form
 
 The current POST handler and Thymeleaf render share one request, so `${param.studentName}` can read the submitted value. A later link click starts another request; ordinary request parameters and model data do not automatically survive. Use explicit URL values, session state, flash attributes, or persistence when the use case requires a longer lifetime.
 
+### Form-backing objects and data binding
+
+`GET /studentForm` creates a blank `Student` under the model key `student`. The form's `th:object="${student}"` selects it, while `th:field="*{firstName}"`, `*{lastName}`, and `*{country}` bind controls to JavaBean property paths. Thymeleaf generates ordinary HTML `name` attributes; the browser submits strings rather than receiving or mutating a live Java object.
+
+The GET object provides form shape and initial values. The POST is a new request in which Spring obtains or creates another `Student`, binds matching request values, and passes it to `@ModelAttribute("student") Student student`. That annotation also exposes the populated object to the result view, so `${student.firstName}` works without a separate POST `Model` parameter.
+
+**Recall rule:** GET supplies the form object; HTML supplies `name=value`; POST binding rebuilds structured Java state.
+
+### Thymeleaf expression roles
+
+`${...}` reads from the complete template context/model, `*{...}` reads or binds relative to the nearest `th:object`, and `@{...}` builds a context-aware URL. Thus `${countries}` selects the choice list, `*{country}` targets `Student.country`, and `@{/processStudentForm}` targets the POST mapping.
+
+### Nested paths, extra fields, and safe binding
+
+A composed object can use a path such as `*{address.street}`. An unknown field does not become a new Java property, but a client can manually submit any parameter name. If the target exposes a sensitive writable property, binding may populate it even if the HTML did not show that control. Production forms should prefer purpose-built form/DTO types, constructor binding, or explicit allowed fields instead of binding arbitrary request data to a rich persistence entity.
+
+### Static and dynamic select options
+
+On `<select th:field="*{country}">`, an option's value is submitted while its body/text is displayed. Plain `value="Brazil"` is sufficient for a static option. A static Thymeleaf string containing spaces needs quoting, such as `th:value="'United States'"`; dynamic `th:value="${tempCountry}"` already evaluates to one string and preserves spaces.
+
+The configured path is `countries` in `application.properties` → `@Value("${countries}")` collection → model attribute `countries` → `th:each="tempCountry : ${countries}"` → one option per item. The earlier literal `${countries}` dropdown came from a missing `}` in the placeholder plus a misspelled `contries` key, not from `th:each`.
+
+On 2026-09-28, the installed-Maven fallback passed one context test after the wrapper launcher failed. A live check on port `18088` rendered all five configured choices and preserved `United States` through POST binding and the confirmation view. The context test proves startup; the HTTP checks prove rendering and binding.
+
 ### Future: Post/Redirect/Get
 
 The current handlers render directly from POST. Post/Redirect/Get instead processes the POST, sends a redirect, and lets the browser perform a GET for the result page. It avoids normal refresh-driven form resubmission; flash attributes can carry one-time data across the redirect. PRG is recorded for the next lesson and is not yet implemented.
@@ -804,5 +828,20 @@ The current handlers render directly from POST. Post/Redirect/Get instead proces
 203. Which mechanisms can intentionally carry data across requests?
 204. Why is the current `date` model attribute not visible at `/helloworld`?
 205. What problem does Post/Redirect/Get solve, and is it implemented here?
+206. Why does `GET /studentForm` add an empty `Student` to the model?
+207. Does the browser modify the GET request's Java object directly?
+208. Which name must `th:object="${student}"` match?
+209. How do `${student}`, `*{firstName}`, and `@{/processStudentForm}` differ?
+210. What HTML submission attribute does `th:field` generate from a property path?
+211. What broad jobs does `@ModelAttribute("student")` perform in the POST handler?
+212. Why can confirmation read `${student.country}` without a POST `Model` parameter?
+213. How would a nested `Address.street` property be written in `th:field`?
+214. Why should a production form avoid binding arbitrary input directly to a rich entity?
+215. On an option, what is the difference between its value and displayed text?
+216. When is `value="United States"` simpler than `th:value="'United States'"`?
+217. Why does `${tempCountry}` preserve a value containing spaces?
+218. What chain connects `countries` in `application.properties` to generated options?
+219. Why did a malformed `@Value` placeholder produce one literal option?
+220. What did `contextLoads()` prove, and what did the live GET/POST checks prove?
 
 Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md), the [Section 04 Spring Data REST notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md), the [Section 04 Springdoc notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md), the [Section 05 security notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md), and the [Section 07 Spring MVC and Thymeleaf notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md).

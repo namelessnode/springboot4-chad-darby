@@ -33,7 +33,7 @@ chadDarby/
 | 04 — Spring REST CRUD | [`04-spring-boot-rest-crud-employee-with-spring-rest`](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/) | Spring Data REST generated CRUD, repository URL customization, HAL links, paging/sorting, query method search, and request parameter annotations | In progress |
 | 04 — Spring REST CRUD | [`05-spring-boot-rest-crud-employee-swagger`](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/) | Springdoc OpenAPI 3.1, generated JSON/YAML API descriptions, Swagger UI, custom documentation paths, and interactive API exploration | In progress |
 | 05 — Spring Boot REST Security | [`00-spring-boot-rest-security-employee-starter-code`](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/) | Default and in-memory users, JDBC authentication, custom security schemas and queries, enterprise identity sources, HTTP Basic, role rules, and CSRF | In progress |
-| 07 — Spring Boot Spring MVC | [`01-thymeleafdemo-helloworld`](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/) | Front-controller flow, `@Controller`, Thymeleaf templates, model/request data, form parameters, and GET/POST mappings | In progress |
+| 07 — Spring Boot Spring MVC | [`01-thymeleafdemo-helloworld`](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/) | Front-controller flow, Thymeleaf templates, request/model data, GET/POST forms, `@ModelAttribute` data binding, form-backing objects, and static/dynamic selects | In progress |
 
 ## Section 01 — Spring Boot Basics
 
@@ -150,13 +150,16 @@ This project preserves the progression from Boot's development user to in-memory
 
 ### `01-thymeleafdemo-helloworld`
 
-This first server-rendered MVC project contrasts `@Controller` with the earlier REST controllers. `GET /showForm` renders three independent forms, and their POST handlers demonstrate direct Thymeleaf request-parameter access, manual `HttpServletRequest` processing, targeted `@RequestParam` binding, and model attributes. The notes trace the complete `DispatcherServlet` → controller → model → Thymeleaf flow, explain the required `templates`/`static` resource layout, distinguish request parameters from attributes, cover missing versus blank inputs, and record the future Post/Redirect/Get lesson.
+This first server-rendered MVC project contrasts `@Controller` with the earlier REST controllers. `GET /showForm` renders three independent forms whose POST handlers demonstrate direct Thymeleaf request-parameter access, manual `HttpServletRequest` processing, targeted `@RequestParam` binding, and model attributes. `GET /studentForm` adds a blank `Student` form-backing object and configured country choices; `POST /processStudentForm` uses `@ModelAttribute` to bind names and the selected country, including options generated from `application.properties`. The notes trace both request paths, compare `${...}`, `*{...}`, and `@{...}`, explain nested-property binding and extra-field behavior, preserve the resolved `${countries}` troubleshooting example, and record the future Post/Redirect/Get lesson.
 
 - [Detailed Spring MVC and Thymeleaf notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md)
 - [Maven configuration](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/pom.xml)
-- [Form controller](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/java/com/example/thymeleafdemo/controller/HelloWorldController.java)
-- [Form template](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/resources/templates/helloworld-form.html)
-- [Result template](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/resources/templates/helloworld.html)
+- [Single-parameter form controller](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/java/com/example/thymeleafdemo/controller/HelloWorldController.java)
+- [Student data-binding controller](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/java/com/example/thymeleafdemo/controller/StudentController.java)
+- [Student form-backing class](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/java/com/example/thymeleafdemo/model/Student.java)
+- [Student form template](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/resources/templates/student-form.html)
+- [Student confirmation template](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/resources/templates/show-confirmation.html)
+- [Configured country choices](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/src/main/resources/application.properties)
 
 ## How to study from this repository
 

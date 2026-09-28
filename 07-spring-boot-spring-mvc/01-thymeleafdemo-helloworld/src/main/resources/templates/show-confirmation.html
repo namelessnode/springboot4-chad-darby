@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+
+<html xmlns:th="http://www.thymeleaf.org">
+<title>Student Confirmation</title>
+<body>
+
+<h1>Student Confirmation</h1>
+<p> Confirmed Student <span th:text = "${student.firstName} +' '+${student.lastName}"></span></p>
+<p>from country: <span th:text = "${student.country}"></span></p>
+</body>
+
+</html>

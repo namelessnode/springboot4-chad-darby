@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+
+<html xmlns:th="http://www.thymeleaf.org">
+<title>Student Registration Form</title>
+<body>
+
+<h1> Student Registration Form</h1><br/><br/>
+
+<form th:action = "@{/processStudentForm}" th:object="${student}" method="POST">
+    first name:
+    <input type = "text" th:field = "*{firstName}"></input>
+    <br>
+    <br>
+    last name:cod
+    <input type = "text" th:field = "*{lastName}"></input>
+    <br>
+    <br>
+    <input type =  "submit" value = "Submit"></input>
+    <select th:field = "*{country}">Country:
+        <option th:value="Brazil">Brazil</option>
+        <option th:value="Mexico">Mexico</option>
+        <option th:value="India">India</option>
+
+    </select>
+</form>
+
+<h1>Form with dynamic values read from properties file</h1>
+
+<form th:action = "@{/processStudentForm}" th:object="${student}" method="POST">
+    first name:
+    <input type = "text" th:field = "*{firstName}"></input>
+    <br>
+    <br>
+    last name:cod
+    <input type = "text" th:field = "*{lastName}"></input>
+    <br>
+    <br>
+    <input type =  "submit" value = "Submit"></input>
+    <select th:field = "*{country}">
+        <option th:each = "tempCountry : ${countries}" th:value="${tempCountry}" th:text = "${tempCountry}"/>
+    </select>
+</form>
+</body>
+
+</html>

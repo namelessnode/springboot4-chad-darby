@@ -1,9 +1,9 @@
 ---
-title: "Spring MVC, Thymeleaf, and Form Parameters"
-description: "Revision notes for DispatcherServlet, controllers, views, Model, request parameters, and GET/POST form handling."
+title: "Spring MVC, Thymeleaf, and Form Data Binding"
+description: "Revision notes for DispatcherServlet, controllers, views, Model, request parameters, form-object data binding, and Thymeleaf forms."
 ---
 
-# Spring MVC, Thymeleaf, and Form Parameters
+# Spring MVC, Thymeleaf, and Form Data Binding
 
 These notes capture the project as it existed on **2026-09-24**. They explain the runtime path first, then connect each annotation, HTML form, request value, model attribute, and Thymeleaf expression to the active code.
 
@@ -440,8 +440,411 @@ Try answering before expanding the answer mentally.
 - **Input APIs:** whole request = `HttpServletRequest`; chosen field = `@RequestParam`.
 - **HTTP:** GET retrieves; POST processes; HTTPS protects.
 
+## Lesson Update — 2026-09-28: Student Form Data Binding and Dynamic Selects
+
+### Lesson snapshot
+
+| Item | Current lesson state | Source |
+|---|---|---|
+| Learning goal | Bind related form fields to one `Student` object instead of reading each parameter manually | [StudentController.java](src/main/java/com/example/thymeleafdemo/controller/StudentController.java#L19-L29) |
+| Form route | `GET /studentForm` | [StudentController.java](src/main/java/com/example/thymeleafdemo/controller/StudentController.java#L19-L24) |
+| Processing route | `POST /processStudentForm` | [StudentController.java](src/main/java/com/example/thymeleafdemo/controller/StudentController.java#L26-L29) |
+| Form-backing type | `Student` with `firstName`, `lastName`, and `country` properties | [Student.java](src/main/java/com/example/thymeleafdemo/model/Student.java#L5-L35) |
+| Form-object model key | `student` | [StudentController.java](src/main/java/com/example/thymeleafdemo/controller/StudentController.java#L21) |
+| Configured choices | `countries=India, Spain, Mexico, Japan, United States` | [application.properties](src/main/resources/application.properties#L2) |
+| Result view | Reads the populated `student` model attribute | [show-confirmation.html](src/main/resources/templates/show-confirmation.html#L7-L9) |
+
+This lesson extends the earlier single-parameter forms. Those handlers receive one `studentName`; this handler asks Spring MVC to bind a group of related request parameters to a structured Java object.
+
+**Mental model:** the GET supplies a blank form-backing object, Thymeleaf turns its properties into named HTML controls, and the POST lets Spring create and populate a new object from the submitted `name=value` pairs.
+
+### Complete GET-render-POST flow
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryTextColor':'#e6edf3','primaryBorderColor':'#6d5dfc','lineColor':'#8b949e','actorBkg':'#2d333b','actorBorder':'#6d5dfc','actorTextColor':'#e6edf3','signalColor':'#8b949e','signalTextColor':'#e6edf3','labelBoxBkgColor':'#161b22','labelTextColor':'#e6edf3','background':'#161b22'}}}%%
+sequenceDiagram
+    autonumber
+    actor Browser
+    participant Dispatcher as DispatcherServlet
+    participant Controller as StudentController
+    participant Thymeleaf
+    participant Binder as WebDataBinder
+
+    Browser->>Dispatcher: GET /studentForm
+    Dispatcher->>Controller: getForm(Model)
+    Controller->>Controller: new Student()
+    Controller->>Controller: add student and countries to Model
+    Controller-->>Dispatcher: "student-form"
+    Dispatcher->>Thymeleaf: Render template with Model
+    Thymeleaf-->>Browser: HTML inputs and country options
+    Browser->>Dispatcher: POST /processStudentForm<br>firstName=Kaushik and country=United States
+    Dispatcher->>Binder: Create or obtain "student" and bind fields
+    Binder->>Binder: setFirstName, setLastName, setCountry
+    Binder-->>Controller: populated Student
+    Controller-->>Dispatcher: "show-confirmation"
+    Dispatcher->>Thymeleaf: Render populated student
+    Thymeleaf-->>Browser: Confirmation HTML
+```
+
+<!-- Sources: src/main/java/com/example/thymeleafdemo/controller/StudentController.java:19-29, src/main/java/com/example/thymeleafdemo/model/Student.java:5-35, src/main/resources/templates/student-form.html:9-41, src/main/resources/templates/show-confirmation.html:7-9 -->
+
+The browser never receives a live Java object. Thymeleaf uses the GET object to generate HTML, the GET ends, and the browser later sends strings in a new POST. Spring then constructs or obtains the POST model object and binds those strings to it.
+
+```text
+GET request:  Student A -> read while generating blank HTML controls
+POST request: Student B -> populated from submitted request parameters
+```
+
+They have the same type and model name, but they are normally different instances because they belong to different requests.
+
+### Why the GET handler adds an empty `Student`
+
+```java
+@GetMapping("/studentForm")
+public String getForm(Model model) {
+    model.addAttribute("student", new Student());
+    model.addAttribute("countries", Countries);
+    return "student-form";
+}
+```
+
+`Model` is Spring's container for view data. `new Student()` is the **form-backing object** or **command object**. It starts with `null` properties, but gives Thymeleaf a known property structure. The same pattern can later pre-populate an edit form or redisplay submitted values after validation errors.
+
+```text
+Model
+├── "student"   -> Student(firstName=null, lastName=null, country=null)
+└── "countries" -> [India, Spain, Mexico, Japan, United States]
+```
+
+`th:object="${student}"` must resolve the same model key used by `model.addAttribute("student", ...)`. The choice list is a separate model entry because it supplies options; it is not a property of the active `Student` class.
+
+### Names that must line up
+
+| Name or path | Producer | Consumer | Purpose |
+|---|---|---|---|
+| `student` | `model.addAttribute("student", new Student())` | `th:object="${student}"` | Select the form object during GET rendering |
+| `student` | `@ModelAttribute("student")` | `${student.firstName}` and `${student.country}` | Name the populated object for the result view |
+| `firstName` | `th:field="*{firstName}"` | `Student.setFirstName(...)` | Bind the first name |
+| `lastName` | `th:field="*{lastName}"` | `Student.setLastName(...)` | Bind the last name |
+| `country` | `th:field="*{country}"` | `Student.setCountry(...)` | Bind the selected country |
+| `countries` | `model.addAttribute("countries", Countries)` | `${countries}` in `th:each` | Supply option values |
+
+The Java variable may have a different name:
+
+```java
+public String processStudentForm(
+        @ModelAttribute("student") Student submittedStudent) {
+    // The model key is still "student".
+}
+```
+
+The annotation value controls the model name; `submittedStudent` is only the local Java name.
+
+### `${...}`, `*{...}`, and `@{...}`
+
+| Expression | Meaning | Current example |
+|---|---|---|
+| `${...}` | Read from the complete Thymeleaf context/model | `${student}`, `${countries}`, `${tempCountry}` |
+| `*{...}` | Read or bind relative to the nearest `th:object` | `*{firstName}`, `*{lastName}`, `*{country}` |
+| `@{...}` | Build a context-aware URL | `@{/processStudentForm}` |
+
+```html
+<form th:action="@{/processStudentForm}"
+      th:object="${student}"
+      method="POST">
+    <input type="text" th:field="*{firstName}">
+</form>
+```
+
+Because `student` is selected, `*{firstName}` is approximately a shorter, binding-aware reference to `${student.firstName}`. On a text input, `th:field` generates the important `id`, `name`, and current `value`. The generated `name="firstName"` causes the browser to submit `firstName=...`.
+
+**Memory aid:** `$` selects context data, `*` selects a property of the form object, and `@` builds a URL.
+
+### What `@ModelAttribute` adds on POST
+
+```java
+@PostMapping("/processStudentForm")
+public String processStudentForm(
+        @ModelAttribute("student") Student student) {
+    return "show-confirmation";
+}
+```
+
+For this lesson, a useful approximation is:
+
+```java
+Student student = new Student();
+student.setFirstName(request.getParameter("firstName"));
+student.setLastName(request.getParameter("lastName"));
+student.setCountry(request.getParameter("country"));
+model.addAttribute("student", student);
+```
+
+The framework does more: it can obtain an existing attribute, instantiate one when needed, apply constructor/property binding and type conversion, record binding errors, supply the object to the controller, and expose it to the view. That last step explains why `${student.country}` works in the confirmation template without a separate POST `Model` parameter.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryTextColor':'#e6edf3','primaryBorderColor':'#6d5dfc','lineColor':'#8b949e','background':'#161b22'}}}%%
+classDiagram
+    class Student {
+        -String firstName
+        -String lastName
+        -String country
+        +Student()
+        +getFirstName() String
+        +setFirstName(String)
+        +getLastName() String
+        +setLastName(String)
+        +getCountry() String
+        +setCountry(String)
+    }
+    class StudentController {
+        +getForm(Model) String
+        +processStudentForm(Student) String
+    }
+    class StudentFormTemplate {
+        +String selectedObject
+        +String firstNameField
+        +String lastNameField
+        +String countryField
+    }
+    StudentController --> Student : creates and receives
+    StudentFormTemplate --> Student : binds properties
+
+    classDef source fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    class Student,StudentController,StudentFormTemplate source
+```
+
+<!-- Sources: src/main/java/com/example/thymeleafdemo/model/Student.java:5-35, src/main/java/com/example/thymeleafdemo/controller/StudentController.java:13-30, src/main/resources/templates/student-form.html:9-41 -->
+
+### Nested/composed objects — future example, not implemented
+
+If a later version uses composition, selection expressions follow the nested property path:
+
+```java
+public class Address {
+    private String street;
+    private String city;
+    // getters and setters
+}
+
+public class Student {
+    private Address address = new Address();
+    // getters and setters
+}
+```
+
+```html
+<input type="text" th:field="*{address.street}">
+<input type="text" th:field="*{address.city}">
+```
+
+The browser submits `address.street=...` and Spring navigates the property path to populate the nested `Address`. Initializing the nested object is an easy beginner pattern; constructor binding is another design to explore later.
+
+```text
+*{address.street}
+    -> Student.getAddress()
+    -> Address.setStreet(submittedValue)
+```
+
+### Additional submitted fields and safe binding
+
+| Submitted field | Matching writable property? | Result |
+|---|---:|---|
+| `firstName=Kaushik` | Yes | Binds through `setFirstName(...)` |
+| `address.street=MG Road` in the future model | Yes, nested | Binds to `Address.street` |
+| `favoriteColor=Blue` with no such property | No | Not represented in `Student`; unknown fields are normally ignored |
+| Control with no `name` | Not applicable | Browser does not submit it normally |
+| Disabled control | Not applicable | Browser does not submit it |
+
+If an extra value belongs to the form, add it to a purpose-built form object or receive it separately with `@RequestParam`. A client can manually send parameters not visible in the HTML, so a writable sensitive property can be populated if the target type exposes it. Production forms should prefer a dedicated form/DTO, constructor binding, or an explicit allowlist instead of binding untrusted input to a rich persistence entity.
+
+### Static country options
+
+The first form uses hard-coded choices:
+
+```html
+<select th:field="*{country}">
+    <option th:value="Brazil">Brazil</option>
+    <option th:value="Mexico">Mexico</option>
+    <option th:value="India">India</option>
+</select>
+```
+
+`th:field="*{country}"` defines which `Student` property receives the selection. An option's value is submitted; its body is displayed. For a static option, plain HTML is simpler:
+
+```html
+<option value="Brazil">Brazil</option>
+```
+
+If a static Thymeleaf value contains spaces, quote the string literal:
+
+```html
+<option th:value="'United States'">United States</option>
+```
+
+This is unnecessary for `${tempCountry}` because that expression already evaluates to one string, even when the string contains spaces.
+
+### Dynamic country options from `application.properties`
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryTextColor':'#e6edf3','primaryBorderColor':'#6d5dfc','lineColor':'#8b949e','background':'#161b22'}}}%%
+flowchart LR
+    P["application.properties<br>countries=India,..."] --> V["@Value(${countries})<br>List of strings"]
+    V --> M["Model key<br>countries"]
+    M --> E["th:each<br>tempCountry"]
+    E --> O["option value and text"]
+    O --> R["POST country=selection"]
+    R --> S["Student.setCountry"]
+
+    classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    class P,V,M,E,O,R,S dark
+```
+
+<!-- Sources: src/main/resources/application.properties:2, src/main/java/com/example/thymeleafdemo/controller/StudentController.java:16-23, src/main/resources/templates/student-form.html:39-41, src/main/java/com/example/thymeleafdemo/model/Student.java:29-35 -->
+
+The active controller injection is:
+
+```java
+@Value("${countries}")
+List<String> Countries;
+```
+
+Spring resolves the property and converts its comma-separated text into the declared collection. The controller publishes that collection as the model attribute `countries`.
+
+```html
+<option th:each="tempCountry : ${countries}"
+        th:value="${tempCountry}"
+        th:text="${tempCountry}" />
+```
+
+- `th:each` repeats the option once per list element and creates the scoped `tempCountry` variable.
+- `th:value` sets the submitted value.
+- `th:text` sets the displayed label.
+- The surrounding `th:field="*{country}"` connects the selection to `Student.country`.
+
+An explicit `</option>` closing tag is clearer HTML, although the active self-closing template rendered successfully during the smoke test.
+
+### Resolved `${countries}` troubleshooting example
+
+The dropdown temporarily displayed one literal `${countries}`-style entry. The `th:each` expression was correct; two upstream names were wrong:
+
+| Earlier mistake | Why it broke the chain | Correct active form |
+|---|---|---|
+| `@Value("${countries")` | Missing `}` prevented a complete placeholder | `@Value("${countries}")` |
+| `contries=...` | The property key did not match `countries` | `countries=...` |
+
+Thymeleaf received one literal value instead of the expected collection, so it iterated once and displayed that literal. Diagnose this flow from the source outward:
+
+```text
+application.properties key
+    -> @Value placeholder spelling and braces
+    -> Java field value and type
+    -> model.addAttribute key
+    -> Thymeleaf ${...} model name
+    -> th:each iteration variable
+```
+
+**Recall rule:** `@Value("${countries}")` reads configuration; `model.addAttribute("countries", ...)` exposes it; `${countries}` reads it from the model.
+
+### Current implementation notes, not silent cleanup
+
+The lesson works, but these source details remain and were intentionally not changed while writing notes:
+
+- The field is named `Countries`; normal Java style would be lowercase `countries` and usually `private`.
+- `@Value(("${countries}"))` contains unnecessary parentheses but resolves correctly.
+- `Student.java` imports `java.util.List` without using it.
+- Both forms reuse the same `student` object name and POST endpoint. This is valid because only the submitted form's controls are sent.
+- Each form places its submit input before its select, explaining the visual order.
+- The static form places `Country:` inside `<select>` instead of using a `<label>`.
+- Both last-name captions contain the extra text `cod`.
+- No validation annotation or `BindingResult` is present yet.
+
+These are review clues, not evidence that data binding failed.
+
+### Observed verification — 2026-09-28
+
+The Maven Wrapper was attempted first and failed before Maven started:
+
+```text
+Cannot index into a null array
+Cannot start maven from wrapper
+```
+
+The established installed-Maven fallback was then run:
+
+```powershell
+mvn "-Dmaven.repo.local=C:\Users\Kaushik\.m2\repository" test
+```
+
+Observed result: `BUILD SUCCESS`; one test ran with zero failures, errors, or skips. The context started with Spring Boot `4.1.1` on Java `26.0.1`. This proves startup only; [contextLoads()](src/test/java/com/example/thymeleafdemo/ThymeleafdemoApplicationTests.java#L6-L11) does not render or submit the student form.
+
+The application was then run temporarily on port `18088`, checked, and stopped:
+
+| Request/check | Observed result |
+|---|---|
+| `GET /studentForm` | `200 OK` |
+| Static options | `Brazil`, `Mexico`, `India` |
+| Dynamic options | `India`, `Spain`, `Mexico`, `Japan`, `United States` |
+| POST with `firstName=Kaushik`, `lastName=Kumar`, `country=United States` | `200 OK` |
+| Confirmation | Displayed `Kaushik Kumar` and `United States` |
+| Controller output | Printed `first name = Kaushik, lastName = Kumar, country = United States` |
+
+This proves the property-to-model-to-option path and confirms that a dynamically supplied multi-word value remains one submitted `String`.
+
+### Active recall for data binding
+
+1. **Why does the GET add an empty `Student`?**
+   It supplies the form-backing object whose properties Thymeleaf binds to controls.
+
+2. **Does the browser modify that Java object?**
+   No. It receives HTML and later sends strings in a new POST.
+
+3. **What must `th:object="${student}"` match?**
+   The model attribute name.
+
+4. **What does `*{firstName}` mean?**
+   Select `firstName` relative to the current `th:object`.
+
+5. **What submission attribute does `th:field` generate?**
+   `name`, along with a matching `id` and current value where applicable.
+
+6. **What does `@ModelAttribute("student")` do?**
+   It obtains/creates the object, binds request values, supplies it to the method, and exposes it to the view.
+
+7. **Why can confirmation read `${student.country}` without a POST `Model` parameter?**
+   The `@ModelAttribute` argument is already added to the model.
+
+8. **How is a composed address property named?**
+   `*{address.street}` or `*{address.city}`.
+
+9. **Will an unknown field become a new `Student` property?**
+   No; it has no matching writable property.
+
+10. **Why avoid binding arbitrary input to a rich entity?**
+    A client can submit fields that were not visible in the HTML, creating over-posting risk.
+
+11. **What does `th:field="*{country}"` do on a select?**
+    It binds the selected option to `Student.country` and manages selected-state rendering.
+
+12. **Option value versus option text?**
+    The value is submitted; the text is displayed.
+
+13. **Why is `${tempCountry}` safe for `United States`?**
+    It evaluates to one existing string rather than parsing the words as template syntax.
+
+14. **What connects configured countries to the template?**
+    Property key `countries`, model key `countries`, and `${countries}`.
+
+15. **Why did the broken dropdown show one placeholder entry?**
+    A malformed/mismatched property placeholder supplied one literal value, so the correct loop ran once.
+
 ## Official References
 
+- [Spring Framework 7 — `@ModelAttribute` method arguments](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/modelattrib-method-args.html)
+- [Spring Framework 7 — Web MVC data binding and safe model design](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-data-binding.html)
+- [Spring Framework 7 — core data binding and nested property paths](https://docs.spring.io/spring-framework/reference/core/validation/data-binding.html)
+- [Spring Framework 7 — using `@Value`](https://docs.spring.io/spring-framework/reference/core/beans/annotation-config/value-annotations.html)
+- [Thymeleaf 3.1 — Spring form binding, fields, and selectors](https://www.thymeleaf.org/doc/tutorials/3.1/thymeleafspring.html)
 - [Spring Framework 7 — DispatcherServlet](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-servlet.html)
 - [Spring Framework 7 — annotated request mappings](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html)
 - [Spring Framework 7 — `@RequestParam`](https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/requestparam.html)
@@ -454,4 +857,3 @@ Try answering before expanding the answer mentally.
 - [Course README](../../README.md) — section navigation and progress
 - [Cumulative course review](../../COURSE_REVIEW.md) — compact cross-section recall
 - [Spring REST foundations](../../04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md) — compare `@RestController`, response bodies, and DispatcherServlet routing
-
