@@ -614,6 +614,24 @@ The configured path is `countries` in `application.properties` → `@Value("${co
 
 On 2026-09-28, the installed-Maven fallback passed one context test after the wrapper launcher failed. A live check on port `18088` rendered all five configured choices and preserved `United States` through POST binding and the confirmation view. The context test proves startup; the HTTP checks prove rendering and binding.
 
+### Control-aware `th:field`
+
+`th:field` connects a control to a property path relative to `th:object`. Its output depends on the control: a text input receives a property-based name, ID, and current value; a select tracks the matching selected option; radios share a name while receiving unique IDs and one checked value; multi-valued checkboxes share a name, receive unique IDs, and include framework-generated hidden field markers for unchecked handling.
+
+**Recall rule:** `th:field` identifies the destination property; each choice's `value` identifies the value that may be submitted.
+
+### Radio buttons bind one scalar value
+
+Every language radio uses `th:field="*{favouriteLanguage}"`, so the generated controls share `name="favouriteLanguage"`. Each has a different value, but the group represents one selection and the model property is therefore `String favouriteLanguage`. Static radios write their choices in the template; dynamic radios iterate the configured `languages` list supplied through the controller model.
+
+### Checkboxes bind repeated values to a collection
+
+Every system checkbox uses `th:field="*{favouriteSystems}"`. Checking several boxes sends repeated `favouriteSystems` parameters, which Spring binds to `List<String> favouriteSystems`. Static checkboxes define their values in the template; dynamic checkboxes iterate the configured `systems` list. The confirmation view reads the single language directly and uses `th:each` to render each selected system.
+
+The two student forms safely reuse the same property paths and processing route because only successful controls inside the clicked form are submitted. The active code has no validation annotations or `BindingResult`, so language and system selections are not currently mandatory.
+
+On 2026-09-29, installed Maven passed the one context test. Focused HTTP checks rendered three static and five dynamic choices for both radios and checkboxes, bound static `Rust`, dynamic `Scala`, static systems `Windows` plus `Fedora OS`, and dynamic systems `MAC` plus `Cent OS`, and returned `200 OK` confirmation pages. These checks prove rendering and binding, not validation or persistence.
+
 ### Future: Post/Redirect/Get
 
 The current handlers render directly from POST. Post/Redirect/Get instead processes the POST, sends a redirect, and lets the browser perform a GET for the result page. It avoids normal refresh-driven form resubmission; flash attributes can carry one-time data across the redirect. PRG is recorded for the next lesson and is not yet implemented.
@@ -843,5 +861,14 @@ The current handlers render directly from POST. Post/Redirect/Get instead proces
 218. What chain connects `countries` in `application.properties` to generated options?
 219. Why did a malformed `@Value` placeholder produce one literal option?
 220. What did `contextLoads()` prove, and what did the live GET/POST checks prove?
+221. Why is `favouriteLanguage` a `String` while `favouriteSystems` is a `List<String>`?
+222. What must every radio in one group share, and what differs between its choices?
+223. How do repeated checkbox request parameters become one Java collection?
+224. How do `${systems}` and `*{favouriteSystems}` differ?
+225. What extra checkbox-related markup did `th:field` generate during the live GET?
+226. Why does the confirmation template use `th:each` for systems but not for language?
+227. Do both student forms contribute values when only one form is submitted?
+228. Does the current project require the user to select a language or system?
+229. What did the radio/checkbox HTTP checks prove beyond `contextLoads()`?
 
 Answers and runnable examples are in the [Section 01 project notes](01-spring-boot-basics/springBootApp/notes.md), [Section 02 project notes](02-spring-boot-core/coach/notes.md), [Section 03 project notes](03-spring-boot-hibernate-jpa-crud/01-cruddemo-student/notes.md), the [Section 04 REST foundations](04-springboot-rest-crud/01-spring-boot-rest-crud/notes.md), the [Section 04 manual employee REST/JPA notes](04-springboot-rest-crud/02-spring-boot-rest-crud-employee/notes.md), the [Section 04 Spring Data JPA repository notes](04-springboot-rest-crud/03-spring-boot-rest-crud-employee-with-jpa-repository/notes.md), the [Section 04 Spring Data REST notes](04-springboot-rest-crud/04-spring-boot-rest-crud-employee-with-spring-rest/notes.md), the [Section 04 Springdoc notes](04-springboot-rest-crud/05-spring-boot-rest-crud-employee-swagger/notes.md), the [Section 05 security notes](05-spring-boot-rest-security/00-spring-boot-rest-security-employee-starter-code/notes.md), and the [Section 07 Spring MVC and Thymeleaf notes](07-spring-boot-spring-mvc/01-thymeleafdemo-helloworld/notes.md).

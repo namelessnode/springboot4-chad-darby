@@ -746,9 +746,9 @@ application.properties key
 
 **Recall rule:** `@Value("${countries}")` reads configuration; `model.addAttribute("countries", ...)` exposes it; `${countries}` reads it from the model.
 
-### Current implementation notes, not silent cleanup
+### Implementation notes recorded on 2026-09-28
 
-The lesson works, but these source details remain and were intentionally not changed while writing notes:
+At the 2026-09-28 snapshot, the lesson worked but the following source details remained and were intentionally not changed while writing notes. Some were corrected by the 2026-09-29 radio/checkbox lesson, so treat this list as dated learning history rather than the current file state:
 
 - The field is named `Countries`; normal Java style would be lowercase `countries` and usually `private`.
 - `@Value(("${countries}"))` contains unnecessary parentheses but resolves correctly.
@@ -837,6 +837,276 @@ This proves the property-to-model-to-option path and confirms that a dynamically
 
 15. **Why did the broken dropdown show one placeholder entry?**
     A malformed/mismatched property placeholder supplied one literal value, so the correct loop ran once.
+
+## Lesson Update — 2026-09-29: Radio Buttons, Checkboxes, and Multi-Value Binding
+
+### Lesson snapshot
+
+| Item | Current lesson state | Source |
+|---|---|---|
+| Learning goal | Bind one selected radio value and several selected checkbox values to the same `Student` form object | [student-form.html](src/main/resources/templates/student-form.html#L27-L64) |
+| Single-choice property | `String favouriteLanguage` | [Student.java](src/main/java/com/example/thymeleafdemo/model/Student.java#L9-L9) |
+| Multiple-choice property | `List<String> favouriteSystems` | [Student.java](src/main/java/com/example/thymeleafdemo/model/Student.java#L10-L10) |
+| Static choices | Three languages and three systems written directly in the first form | [student-form.html](src/main/resources/templates/student-form.html#L27-L36) |
+| Dynamic choices | `languages` and `systems` loaded from configuration and iterated in the second form | [application.properties](src/main/resources/application.properties#L3-L4), [StudentController.java](src/main/java/com/example/thymeleafdemo/controller/StudentController.java#L18-L28) |
+| Processing route | Both forms submit to `POST /processStudentForm` | [StudentController.java](src/main/java/com/example/thymeleafdemo/controller/StudentController.java#L32-L35) |
+| Result rendering | One language is displayed directly; selected systems are iterated as list items | [show-confirmation.html](src/main/resources/templates/show-confirmation.html#L10-L14) |
+
+The important idea is not the visual shape of a circle or square. It is the **number of submitted values** each control represents:
+
+- A radio group represents **one choice**, so it binds naturally to one `String`.
+- A checkbox group represents **zero, one, or several choices**, so it binds naturally to a collection such as `List<String>`.
+
+**Recall rule:** radio = one property value; checkbox group = repeated values collected into one property.
+
+### Radio versus checkbox binding
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryTextColor':'#e6edf3','primaryBorderColor':'#6d5dfc','lineColor':'#8b949e','background':'#161b22'}}}%%
+flowchart TD
+    F[Student form] --> R[Radio group]
+    F --> C[Checkbox group]
+    R --> RP[One submitted parameter<br>favouriteLanguage=Scala]
+    RP --> RS[String favouriteLanguage]
+    C --> CP[Repeated submitted parameters<br>favouriteSystems=MAC<br>favouriteSystems=Cent OS]
+    CP --> CL[List of strings<br>MAC and Cent OS]
+
+    classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    class F,R,C,RP,RS,CP,CL dark
+```
+
+<!-- Sources: src/main/resources/templates/student-form.html:27-64, src/main/java/com/example/thymeleafdemo/model/Student.java:9-10 -->
+
+All choices in a group use the same `th:field` path:
+
+```html
+<input type="radio"
+       th:field="*{favouriteLanguage}"
+       th:value="Java">
+
+<input type="checkbox"
+       th:field="*{favouriteSystems}"
+       th:value="Windows">
+```
+
+Because the form already selected `th:object="${student}"`, the paths mean:
+
+```text
+*{favouriteLanguage} -> student.favouriteLanguage
+*{favouriteSystems}  -> student.favouriteSystems
+```
+
+The spelling must remain consistent across the template, Java property, getter, and setter. The active project consistently uses the British spelling `favourite...` in all four places.
+
+### What `th:field` contributes for each control
+
+`th:field` is binding-aware rather than merely a shorter `name` attribute. It connects an HTML control to a property of the current `th:object`, generates the submission name and an ID, reads the current property when redisplaying a form, and applies control-specific selected/checked behavior.
+
+| Control | Active expression | Target Java property | Important generated behavior | Source |
+|---|---|---|---|---|
+| Text input | `*{firstName}` | `String firstName` | Generates `name`, `id`, and the current text value | [student-form.html](src/main/resources/templates/student-form.html#L9-L15) |
+| Select | `*{country}` | `String country` | Gives the select its name and marks the matching option selected | [student-form.html](src/main/resources/templates/student-form.html#L18-L24) |
+| Radio group | `*{favouriteLanguage}` | `String favouriteLanguage` | Gives every choice the same name, unique IDs, and checked-state handling for the matching value | [student-form.html](src/main/resources/templates/student-form.html#L27-L30) |
+| Checkbox group | `*{favouriteSystems}` | `List<String> favouriteSystems` | Gives every choice the same name, unique IDs, checked-state handling, and checkbox marker inputs | [student-form.html](src/main/resources/templates/student-form.html#L33-L36) |
+
+The live GET rendered radio IDs from `favouriteLanguage1` through `favouriteLanguage8` and checkbox IDs from `favouriteSystems1` through `favouriteSystems8`. IDs distinguish elements in the page; their common `name` is what groups the submitted values.
+
+For example, one generated checkbox looked like this in the response:
+
+```html
+<input type="checkbox"
+       id="favouriteSystems1"
+       name="favouriteSystems"
+       value="Windows">
+<input type="hidden" name="_favouriteSystems" value="on">
+```
+
+Thymeleaf adds the underscore-prefixed marker because browsers normally omit unchecked checkboxes. It is framework bookkeeping for the checkbox field; the real selected values still use `name="favouriteSystems"`.
+
+### Static choice values
+
+The first form writes each possible value directly in the template:
+
+```html
+<input type="radio"
+       th:field="*{favouriteLanguage}"
+       th:value="'Go Lang'">
+
+<input type="checkbox"
+       th:field="*{favouriteSystems}"
+       th:value="'Fedora OS'">
+```
+
+The nested quotes make a multi-word `th:value` one Thymeleaf string literal. The submitted values are `Go Lang` and `Fedora OS`, without quote characters. A normal static HTML attribute such as `value="Fedora OS"` would be a simpler alternative, but the active lesson intentionally demonstrates `th:value`.
+
+### Dynamic choices from configuration
+
+The second form does not repeat every choice manually. Its choices follow this chain:
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryTextColor':'#e6edf3','primaryBorderColor':'#6d5dfc','lineColor':'#8b949e','background':'#161b22'}}}%%
+flowchart LR
+    P[application.properties<br>languages and systems] --> V[@Value fields<br>List of strings]
+    V --> M[Model attributes<br>languages and systems]
+    M --> E[th:each creates<br>one control per value]
+    E --> TV[th:value assigns<br>submitted choice]
+    TV --> B[th:field binds to<br>Student properties]
+
+    classDef dark fill:#2d333b,stroke:#6d5dfc,color:#e6edf3
+    class P,V,M,E,TV,B dark
+```
+
+<!-- Sources: src/main/resources/application.properties:3-4, src/main/java/com/example/thymeleafdemo/controller/StudentController.java:18-28, src/main/resources/templates/student-form.html:59-64 -->
+
+| Stage | Languages | Systems | Source |
+|---|---|---|---|
+| Configuration key | `languages` | `systems` | [application.properties](src/main/resources/application.properties#L3-L4) |
+| Controller field | `List<String> languages` | `List<String> systems` | [StudentController.java](src/main/java/com/example/thymeleafdemo/controller/StudentController.java#L18-L21) |
+| Model key | `languages` | `systems` | [StudentController.java](src/main/java/com/example/thymeleafdemo/controller/StudentController.java#L27-L28) |
+| Loop variable | `language` | `favouriteSystem` | [student-form.html](src/main/resources/templates/student-form.html#L59-L64) |
+| Bound property | `favouriteLanguage` | `favouriteSystems` | [Student.java](src/main/java/com/example/thymeleafdemo/model/Student.java#L9-L10) |
+
+The loop variable and bound property do **different jobs**. `${language}` or `${favouriteSystem}` is the current available choice, while `*{favouriteLanguage}` or `*{favouriteSystems}` identifies where the user's selection belongs on `Student`.
+
+### Complete POST binding flow
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#2d333b','primaryTextColor':'#e6edf3','primaryBorderColor':'#6d5dfc','lineColor':'#8b949e','actorBkg':'#2d333b','actorBorder':'#6d5dfc','actorTextColor':'#e6edf3','signalColor':'#8b949e','signalTextColor':'#e6edf3','labelBoxBkgColor':'#161b22','labelTextColor':'#e6edf3','background':'#161b22'}}}%%
+sequenceDiagram
+    autonumber
+    actor Browser
+    participant Dispatcher as DispatcherServlet
+    participant Binder as Spring data binder
+    participant Student
+    participant Controller as StudentController
+    participant View as show-confirmation
+
+    Browser->>Dispatcher: POST /processStudentForm
+    Note over Browser,Dispatcher: favouriteLanguage=Scala<br>favouriteSystems=MAC<br>favouriteSystems=Cent OS
+    Dispatcher->>Binder: Bind request parameters to model attribute student
+    Binder->>Student: setFavouriteLanguage("Scala")
+    Binder->>Student: setFavouriteSystems(["MAC", "Cent OS"])
+    Binder-->>Controller: @ModelAttribute Student
+    Controller-->>View: Return show-confirmation with student
+    View-->>Browser: One language and two system list items
+```
+
+<!-- Sources: src/main/java/com/example/thymeleafdemo/model/Student.java:39-52, src/main/java/com/example/thymeleafdemo/controller/StudentController.java:32-35, src/main/resources/templates/show-confirmation.html:10-14 -->
+
+The controller does not need separate `@RequestParam` arguments for these fields. Its existing `@ModelAttribute("student") Student student` tells Spring to bind every matching submitted property into the form object.
+
+### Why the confirmation page handles the two properties differently
+
+One language is one scalar, so the result view reads it directly:
+
+```html
+<span th:text="${student.favouriteLanguage}"></span>
+```
+
+Selected systems form a collection, so the result view iterates it:
+
+```html
+<ul>
+    <li th:each="system : ${student.favouriteSystems}"
+        th:text="${system}"></li>
+</ul>
+```
+
+`${student.favouriteSystems}` obtains the complete list. `th:each` assigns each element to the local variable `system`, and `${system}` renders that one element. The current template correctly keeps the `<ul>` outside the preceding paragraph.
+
+### Two forms can bind the same properties safely
+
+The page contains a static form and a dynamic form. Both use `th:object="${student}"` and submit to `/processStudentForm`, but clicking one submit button sends only successful controls inside that particular form. Values from the other form do not join the request.
+
+This repeats the earlier lesson about the three `studentName` forms:
+
+```text
+clicked form -> its successful controls -> one request -> one bound Student
+```
+
+The server does not receive two `favouriteLanguage` values merely because both forms contain that field.
+
+### Missing selections and current validation boundary
+
+The current model has no validation annotations, and the POST handler has no `BindingResult`. Therefore the application does not reject a submission merely because no language or system was selected. Radio inputs submit only the selected value; checkbox processing also uses Thymeleaf's generated hidden marker inputs to represent that the field existed in the rendered form.
+
+Making either choice mandatory belongs to a later validation lesson. It would require a server-side validation rule rather than relying only on browser markup.
+
+### Common mistakes
+
+| Mistake | Why it causes trouble | Correct mental model |
+|---|---|---|
+| Binding a multi-select checkbox group to one `String` | Several same-named values need a collection representation | Use `List<String>`, an array, or another suitable collection |
+| Giving choices in one group different `th:field` paths | They become different properties instead of alternatives for one property | Keep one shared field path; vary `th:value` |
+| Confusing `th:value` with `th:text` | The value is submitted; the text is displayed | Bind from the value, render the label separately |
+| Expecting `th:each` to create data by itself | It can only iterate a value already present in the template context | Supply `languages` and `systems` from the controller model |
+| Omitting the getter or setter | JavaBean property binding cannot read/write the intended property normally | Keep matching accessors for each bound property |
+| Expecting both forms to be submitted together | Only the clicked form participates | Treat each form submission as a separate HTTP request |
+| Assuming `contextLoads()` proves form binding | It sends no GET or POST and asserts no rendered HTML | Use a focused MVC test or live HTTP check |
+
+HTML/CSS polish is intentionally outside this lesson. The current source's input-label markup is browser-tolerated and the Spring binding works; future cleanup of labels or void-element formatting is not evidence for or against the radio/checkbox data-binding behavior.
+
+### Observed verification — 2026-09-29
+
+After the radio and checkbox changes, installed Maven ran:
+
+```powershell
+mvn "-Dmaven.repo.local=C:\Users\Kaushik\.m2\repository" test
+```
+
+Observed result: `BUILD SUCCESS`; one test ran with zero failures, errors, or skips on Spring Boot `4.1.1` and Java `26.0.1`. The only test remains `contextLoads()`, so this proves application-context startup, not form behavior. The Maven Wrapper had already failed earlier in the lesson before Maven startup with `Cannot index into a null array` and `Cannot start maven from wrapper`.
+
+Focused servers were run on temporary ports, checked, and stopped. The final port `18091` was confirmed free afterward.
+
+| Request/check | Observed result |
+|---|---|
+| `GET /studentForm` | `200 OK`; rendered 3 static and 5 dynamic radios plus 3 static and 5 dynamic checkboxes |
+| Static radio POST | `Rust` bound to `favouriteLanguage` and appeared in confirmation |
+| Dynamic radio POST | `Scala` bound to `favouriteLanguage` and appeared in confirmation |
+| Static checkbox POST | `Windows` and `Fedora OS` bound to `favouriteSystems` and rendered as two list items |
+| Dynamic checkbox POST | `MAC` and `Cent OS` bound to `favouriteSystems` and rendered as two list items |
+| Final combined POST | `Scala`, `MAC`, and `Cent OS` returned `200 OK` and appeared in the confirmation response |
+| Generated checkbox markup | Included unique IDs, shared `name="favouriteSystems"`, and hidden `_favouriteSystems` markers |
+
+These HTTP checks prove current rendering and data binding. They do not prove validation, database persistence, session storage, or Post/Redirect/Get; none of those features is implemented here.
+
+### Active recall for radio buttons and checkboxes
+
+1. **Why does `favouriteLanguage` use `String`?**
+   A radio group represents one selected value.
+
+2. **Why does `favouriteSystems` use `List<String>`?**
+   Several checkboxes can be selected, producing repeated request values for the same property name.
+
+3. **What should all choices in one group share?**
+   The same `th:field` path.
+
+4. **What distinguishes each choice in the group?**
+   Its `th:value` or ordinary `value`.
+
+5. **What does `th:field` generate for radio and checkbox controls?**
+   A shared property-based name, unique IDs, and checked-state binding; checkbox fields also receive marker inputs.
+
+6. **Why can two checked systems reach one setter?**
+   Repeated `favouriteSystems` request parameters are converted into the setter's `List<String>` argument.
+
+7. **How do `${systems}` and `*{favouriteSystems}` differ?**
+   `${systems}` supplies available choices; `*{favouriteSystems}` is the selected collection on the form object.
+
+8. **What does `th:each="favouriteSystem : ${systems}"` do?**
+   It repeats the control once per configured system and exposes the current item as `favouriteSystem`.
+
+9. **Why does confirmation use `th:each` only for systems?**
+   Systems are a collection, while language is one scalar value.
+
+10. **Do both forms contribute values when one submit button is clicked?**
+    No. Only successful controls inside the submitted form are sent.
+
+11. **Does the current form require a language or system selection?**
+    No. There is no active validation rule for either property.
+
+12. **What did the live HTTP checks prove that `contextLoads()` did not?**
+    They proved the templates rendered, the browser-style parameters bound to the intended properties, and confirmation displayed scalar and collection results.
 
 ## Official References
 

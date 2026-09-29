@@ -7,6 +7,12 @@
 <h1>Student Confirmation</h1>
 <p> Confirmed Student <span th:text = "${student.firstName} +' '+${student.lastName}"></span></p>
 <p>from country: <span th:text = "${student.country}"></span></p>
+<p>favourite language is <span th:text = "${student.favouriteLanguage}"></span></p>
+<p>favourite systems are:</p>
+    <ul>
+    <li th:each = "system : ${student.favouriteSystems}" th:text = "${system}"></li>
+</ul>
+
 </body>
 
 </html>

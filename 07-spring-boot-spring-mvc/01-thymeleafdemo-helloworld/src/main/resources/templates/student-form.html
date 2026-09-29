@@ -11,17 +11,32 @@
     <input type = "text" th:field = "*{firstName}"></input>
     <br>
     <br>
-    last name:cod
+    last name:
     <input type = "text" th:field = "*{lastName}"></input>
     <br>
     <br>
-    <input type =  "submit" value = "Submit"></input>
+    country:
     <select th:field = "*{country}">Country:
         <option th:value="Brazil">Brazil</option>
         <option th:value="Mexico">Mexico</option>
         <option th:value="India">India</option>
 
     </select>
+    <br/>
+    <br/>
+    Favourite Language:
+    <input type = "radio" th:field = "*{favouriteLanguage}" th:value = "Java" th:text = "Java"/>
+    <input type = "radio" th:field = "*{favouriteLanguage}" th:value = "Rust" th:text = "Rust"/>
+    <input type = "radio" th:field = "*{favouriteLanguage}" th:value = "'Go Lang'" th:text = "'Go Lang'"/>
+    <br/>
+    <br/>
+    Favourite Systems:
+    <input type = "checkbox" th:field = "*{favouriteSystems}" th:value = "Windows" th:text = "Windows"/>
+    <input type = "checkbox" th:field = "*{favouriteSystems}" th:value = "MAC" th:text = "MAC"/>
+    <input type = "checkbox" th:field = "*{favouriteSystems}" th:value = "'Fedora OS'" th:text = "'Fedora OS'"/>
+    <br/>
+    <br/>
+    <input type =  "submit" value = "Submit"></input>
 </form>
 
 <h1>Form with dynamic values read from properties file</h1>
@@ -31,14 +46,25 @@
     <input type = "text" th:field = "*{firstName}"></input>
     <br>
     <br>
-    last name:cod
+    last name:
     <input type = "text" th:field = "*{lastName}"></input>
     <br>
     <br>
-    <input type =  "submit" value = "Submit"></input>
+    Country:
     <select th:field = "*{country}">
         <option th:each = "tempCountry : ${countries}" th:value="${tempCountry}" th:text = "${tempCountry}"/>
     </select>
+    <br/>
+    <br/>
+    Favourite Language:
+    <input type = "radio" th:field = "*{favouriteLanguage}" th:each = "language : ${languages}" th:value = "${language}" th:text = "${language}"></input>
+    <br/>
+    <br/>
+    Favourite Systems:
+    <input type = "checkbox" th:each = "favouriteSystem : ${systems}" th:field = "*{favouriteSystems}" th:value = "${favouriteSystem}" th:text = "${favouriteSystem}"></input>
+    <br/>
+    <br/>
+    <input type =  "submit" value = "Submit"></input>
 </form>
 </body>
 

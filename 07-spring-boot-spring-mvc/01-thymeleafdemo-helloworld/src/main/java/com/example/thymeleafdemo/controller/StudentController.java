@@ -14,18 +14,24 @@ import java.util.List;
 public class StudentController {
 
     @Value(("${countries}"))
-    List<String> Countries;
+    List<String> countries;
+    @Value("${languages}")
+    List<String> languages;
+    @Value("${systems}")
+    List<String> systems;
 
     @GetMapping("/studentForm")
     public String getForm(Model model){
         model.addAttribute("student", new Student());
-        model.addAttribute("countries", Countries);
+        model.addAttribute("countries", countries);
+        model.addAttribute("languages", languages);
+        model.addAttribute("systems", systems);
         return "student-form";
     }
 
     @PostMapping("/processStudentForm")
     public String processStudentForm(@ModelAttribute("student") Student student){
-        System.out.println("first name = "+student.getFirstName() + ", lastName = "+student.getLastName() + ", country = "+ student.getCountry());
+        System.out.println("first name = "+student.getFirstName() + ", lastName = "+student.getLastName() + ", country = "+ student.getCountry() + ", favourite language = " +student.getFavouriteLanguage() + ", favourite systems = " + student.getFavouriteSystems());
         return "show-confirmation";
     }
 }
